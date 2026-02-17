@@ -3,7 +3,7 @@
 **The universal SDK for spiking neural networks.**
 Train on GPU. Deploy to neuromorphic silicon. One API, any backend.
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 **Repo:** https://github.com/Vantar-AI/nuro
 **Website:** https://vantar.xyz
 **Org:** Vantar AI
@@ -76,10 +76,16 @@ nuro/
       plasticity.py # STDPUpdater (trace-based)
       recorders.py  # Recorder (voltages, spikes, weights)
       checkpoint.py # Save/load model weights + graph
-    loihi/          # Loihi backend — neuromorphic deployment (planned v0.5)
+    loihi/          # Loihi backend — neuromorphic deployment (v0.5.0)
+      backend.py    # LoihiBackend, LoihiCompiledModel
+      dynamics.py   # build_lava_neuron() → Lava LIF/Dense Processes
+      _custom_neurons.py # IzhikevichProcess, AdExProcess (simulation-only)
+      inputs.py     # build_input_process() → Lava RingBuffer
+      monitor.py    # LoihiRecorder (Monitor-based probes)
+      transfer.py   # load_gpu_weights(), apply_weights_to_lava()
   compiler/         # Compiler passes (stubs — future use)
   runtime/          # Runtime execution (stubs — future backends)
-tests/              # 109 tests — pytest
+tests/              # 121 tests — pytest
 examples/
   basics/           # Simulation examples
   training/         # Gradient training examples (v0.4.0+)
@@ -130,7 +136,7 @@ GPU Backend (training):                    Loihi Backend (deployment):
 - STDP auto-disabled during training
 - Custom neurons use `SurrogateSpike.apply(v - thresh, surrogate_fn)`
 
-**Train → Deploy workflow (v0.5.0, planned):**
+**Train → Deploy workflow (v0.5.0):**
 ```python
 # Train on GPU
 gpu_model = nuro.compile(graph, target="gpu", requires_grad=True)
@@ -158,16 +164,19 @@ loihi_model.run(duration=1.0)
 | 0.1.0 | Core API, IR, GPU backend, LIF/IF, STDP, 37 tests |
 | 0.2.0 | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing, 77 tests |
 | 0.3.0 | Batch support, performance benchmarks, 93 tests |
-| **0.4.0** | **Surrogate gradients, BPTT training, differentiable neurons, 109 tests** |
+| 0.4.0 | Surrogate gradients, BPTT training, differentiable neurons, 109 tests |
+| **0.5.0** | **Intel Loihi 2 backend (Lava), weight transfer GPU→Loihi, train→deploy, 121 tests** |
 
 ## Roadmap
-
-- **v0.5.0** — Intel Loihi 2 backend via Lava, weight transfer GPU→Loihi, train→deploy workflow
 - **v0.6.0** — SpiNNaker 2 backend, custom neuron dynamics on Loihi NeuroCores
 - **v0.7.0** — Vantar Cloud MVP (remote compile + deploy)
 - **v1.0.0** — Stable API, documentation site, model zoo
 
-See `PLAN-v0.5.0.md` for detailed Loihi implementation plan.
+**Known gaps (v0.5.0):**
+- `lava-nc` requires Python ≤3.10 — Loihi tests skip on 3.12. Need Python 3.10 venv or CI job to validate.
+- `_custom_neurons.py` dict-based lazy imports need validation with real Lava decorator system.
+- Recurrent/cyclic graphs not yet supported on Loihi backend.
+- Fixed-point weight quantization stubbed but not implemented (scale_factor param).
 
 ## Sibling Projects
 
