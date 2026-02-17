@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nuro"
+version = "0.1.0-dev"
+description = "The universal programming language for neuromorphic, thermodynamic, and biological computing."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "Vantar AI" },
+]
+keywords = ["neuromorphic", "spiking-neural-networks", "thermodynamic-computing", "biological-computing", "brain-inspired"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "networkx>=3.0",
+]
+
+[project.optional-dependencies]
+gpu = ["spikingjelly>=0.0.0.0.14", "torch>=2.0"]
+loihi = ["lava-nc>=0.9"]
+dev = ["pytest>=7.0", "ruff>=0.1"]
+
+[project.urls]
+Homepage = "https://github.com/Vantar-AI/nuro"
+Repository = "https://github.com/Vantar-AI/nuro"
+Issues = "https://github.com/Vantar-AI/nuro/issues"
