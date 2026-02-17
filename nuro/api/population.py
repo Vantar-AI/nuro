@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-SUPPORTED_DYNAMICS = {"lif", "if"}
+SUPPORTED_DYNAMICS = {"lif", "if", "izhikevich", "adex"}
 
 
 @dataclass

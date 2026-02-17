@@ -24,6 +24,21 @@ class CompiledModel(ABC):
     def metrics(self) -> dict[str, Any]:
         """Return metrics from the last run."""
 
+    def record(
+        self,
+        name: str,
+        *,
+        population: Any = None,
+        connection: Any = None,
+        interval: int = 1,
+    ) -> None:
+        """Register a state probe. Override in subclasses."""
+        raise NotImplementedError("This backend does not support recording.")
+
+    def get_state(self, name: str, **kwargs: Any) -> Any:
+        """Retrieve recorded state. Override in subclasses."""
+        raise NotImplementedError("This backend does not support recording.")
+
 
 class Backend(ABC):
     """Base class for compilation backends."""

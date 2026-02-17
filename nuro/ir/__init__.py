@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import networkx as nx
 
@@ -25,6 +25,7 @@ class IRGraph:
         self._digraph = nx.DiGraph()
         self.nodes: dict[str, DynamicsNode] = {}
         self.edges: list[SynapticEdge] = []
+        self.inputs: list[Any] = []  # Carried from API Input objects
 
     @classmethod
     def from_api_graph(cls, graph: APIGraph) -> IRGraph:
@@ -53,6 +54,9 @@ class IRGraph:
             ir.edges.append(edge)
             ir._digraph.add_edge(edge.source_id, edge.target_id, ir_edge=edge)
 
+        # Carry input specs through to backends
+        ir.inputs = list(getattr(graph, "inputs", []))
+
         return ir
 
     @property
@@ -62,3 +66,12 @@ class IRGraph:
     @property
     def num_edges(self) -> int:
         return len(self.edges)
+
+    @property
+    def is_cyclic(self) -> bool:
+        """True if the graph contains at least one cycle."""
+        return not nx.is_directed_acyclic_graph(self._digraph)
+
+    def topological_order(self) -> list[str]:
+        """Return node IDs in topological order. Raises if cyclic."""
+        return list(nx.topological_sort(self._digraph))

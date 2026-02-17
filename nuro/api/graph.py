@@ -7,6 +7,7 @@ from typing import Any, Sequence
 import networkx as nx
 
 from nuro.api.connection import Connection
+from nuro.api.input import Input
 from nuro.api.population import Population
 
 
@@ -21,6 +22,8 @@ class Graph:
         All connections between populations.
     objectives : sequence, optional
         Objective specifications (stub — not yet implemented).
+    inputs : sequence of Input, optional
+        External input specifications for source populations.
     """
 
     def __init__(
@@ -28,10 +31,12 @@ class Graph:
         populations: Sequence[Population],
         connections: Sequence[Connection],
         objectives: Sequence[Any] | None = None,
+        inputs: Sequence[Input] | None = None,
     ) -> None:
         self.populations = list(populations)
         self.connections = list(connections)
         self.objectives = list(objectives) if objectives else []
+        self.inputs = list(inputs) if inputs else []
 
         self._pop_ids = {p.id for p in self.populations}
         self._digraph = nx.DiGraph()
@@ -63,3 +68,8 @@ class Graph:
     @property
     def digraph(self) -> nx.DiGraph:
         return self._digraph
+
+    @property
+    def is_cyclic(self) -> bool:
+        """True if the graph contains at least one cycle."""
+        return not nx.is_directed_acyclic_graph(self._digraph)

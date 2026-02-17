@@ -2,136 +2,252 @@
 
 # Nuro
 
-**The universal programming language for neuromorphic, thermodynamic, and biological computing.**
+**The universal SDK for spiking neural networks.**
 
-*Write once. Compile to any substrate.*
+*One API. Any neuron model. GPU today, neuromorphic silicon tomorrow.*
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.2.0)
+[![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen.svg)](#testing)
 
 </div>
 
 ---
 
-## The Problem
+## What is Nuro?
 
-NVIDIA didn't win AI because of better transistors. They won because **CUDA** let a million developers write parallel code without understanding graphics pipelines.
-
-The entire neuromorphic, thermodynamic, and organoid intelligence sector is stuck at the **pre-CUDA stage**: powerful hardware, almost no one can program it.
-
-- **SpikingJelly** has a few thousand active users
-- **Intel Lava** is mature but locked to Loihi
-- **BrainPy** is elegant but academic
-- **FinalSpark** gives you a REST API to a dish of neurons
-- **Extropic THRML** just shipped v0.1.3 for thermodynamic sampling
-
-None of these talk to each other. A developer who learns one framework is locked into one hardware paradigm.
-
-## The Solution
-
-Nuro is a unified programming abstraction that compiles to spiking silicon, thermodynamic ASICs, and living neurons.
+Nuro is a Python SDK for building spiking neural networks that compiles to multiple backends. Define your network once with a clean, composable API — then run it on GPU today and neuromorphic hardware tomorrow.
 
 ```python
 import nuro
 
-# Define populations — the runtime decides the substrate
-sensory = nuro.Population(size=1024, dynamics="lif", params={"tau": 20e-3})
-motor = nuro.Population(size=64, dynamics="lif", params={"tau": 10e-3})
+# Define populations
+sensory = nuro.Population(size=100, dynamics="izhikevich", params={"preset": "regular_spiking"})
+motor = nuro.Population(size=20, dynamics="adex")
 
-# Connect them — topology is logical, compilation is physical
-conn = nuro.Connection(
-    source=sensory, target=motor,
-    pattern="random_sparse",
-    plasticity="stdp",
-)
+# Connect with STDP learning
+conn = nuro.Connection(source=sensory, target=motor, pattern="dense", plasticity="stdp")
 
-# Define what the system should optimize — not how
-objective = nuro.Objective(
-    type="minimize_surprise",
-    prediction=motor,
-    observation=nuro.EventStream("camera_dvs"),
-)
+# Bring your own data
+inp = nuro.Input(population=sensory, data=my_spike_tensor)
 
-# Compile to any target
-graph = nuro.Graph([sensory, motor], [conn], [objective])
-runtime = nuro.compile(graph, target="auto")
-runtime.run(duration=60.0)
+# Compile and run
+graph = nuro.Graph([sensory, motor], [conn], inputs=[inp])
+model = nuro.compile(graph, target="gpu")
+
+# Record state during simulation
+model.record("voltages", population=motor)
+model.record("spikes", population=motor)
+model.run(duration=1.0)
+
+# Inspect results
+voltages = model.get_state("voltages", population=motor)  # (1000, 20) tensor
+spikes = model.get_state("spikes", population=motor)      # (1000, 20) tensor
+
+# Save for later
+model.save("my_network.pt")
 ```
 
-**The same code compiles to:**
-- 🧠 Intel Loihi 3 (spiking silicon)
-- ⚡ SpiNNaker 2 / SpiNNcloud (general-purpose neuromorphic)
-- 🌡️ Normal Computing CN101 (thermodynamic)
-- 🧬 Extropic TSU (stochastic thermodynamic)
-- 🔬 FinalSpark / Cortical Labs (biological neurons)
-- 🖥️ GPU fallback (via SpikingJelly, for development)
+## Why Nuro?
 
-## Key Design Principles
+The neuromorphic ecosystem is fragmented. SpikingJelly, Lava, BrainPy, Norse — each framework locks you into one paradigm. Nuro provides a single abstraction layer:
 
-1. **Dynamics-first, not tensor-first.** The primitive is a dynamical system, not a matrix.
-2. **Probabilistic by default.** Variables carry uncertainty. A "value" is a distribution unless you explicitly collapse it.
-3. **Topology-aware compilation.** You define logical connectivity. The compiler handles physical mapping.
-4. **Target-agnostic source, target-specific compilation.** One language, every backend.
-5. **Feedback loops are first-class.** Closed-loop sensing-acting-learning is the default.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  DEVELOPER API  (Python-native, PyTorch-like)           │
-│  nuro.Population / nuro.Connection / nuro.Objective     │
-├─────────────────────────────────────────────────────────┤
-│  GRAPH IR  (NIR-Extended)                               │
-│  Dynamics nodes + Probabilistic edges +                 │
-│  Temporal annotations + Topology constraints            │
-├─────────────────────────────────────────────────────────┤
-│  COMPILER                                               │
-│  Graph partitioning · Time-domain mapping ·             │
-│  Learning rule translation · Hardware negotiation       │
-├─────────────────────────────────────────────────────────┤
-│  BACKENDS                                               │
-│  Loihi 3 · SpiNNaker 2 · CN101 · TSU · biOS · GPU     │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Roadmap
-
-| Phase | Timeline | Milestone |
-|-------|----------|-----------|
-| **Phase 1** | 2026 Q1-Q2 | Core API + GPU backend (SpikingJelly) + Loihi backend (Lava) |
-| **Phase 2** | 2026 Q3-Q4 | SpiNNaker 2 backend + thermodynamic backend (THRML/thermox) |
-| **Phase 3** | 2027 H1 | Biological backend (FinalSpark) + task multiplexing |
-| **Phase 4** | 2027 H2+ | Cloud compilation service + model zoo + developer ecosystem |
+- **Backend-agnostic** — write once, compile to GPU (SpikingJelly), Loihi (Lava), or future targets
+- **Bring your own data** — static tensors, generators, or configurable Poisson inputs
+- **Biologically realistic** — LIF, IF, Izhikevich, and AdEx neuron models out of the box
+- **Recurrent graphs** — feedback connections and cyclic topologies just work
+- **State inspection** — record voltages, spikes, and weight dynamics during simulation
+- **Checkpointing** — save and load trained networks with `model.save()` / `nuro.load()`
 
 ## Installation
 
 ```bash
-pip install nuro  # coming soon
+# From source (recommended during early access)
+git clone https://github.com/Vantar-AI/nuro.git
+cd nuro
+pip install -e ".[gpu,dev]"
 ```
 
-## Current Status
+**Requirements:** Python 3.10+, PyTorch 2.0+, SpikingJelly 0.0.0.0.14+
 
-🚧 **Pre-alpha** — Designing core abstractions and building the GPU backend.
+## Quick Start
 
-We're actively looking for:
-- Neuromorphic computing researchers
-- Compiler engineers
-- Contributors with access to Loihi / SpiNNaker / thermodynamic hardware
+### Hello Spikes
 
-## Research
+```python
+import nuro
 
-See our foundational research memo: [The CUDA Moment: Designing the Universal Language for Physics-Native and Biological Computing](https://github.com/Vantar-AI/research)
+input_pop = nuro.Population(size=100, dynamics="lif", params={"tau": 20e-3})
+output_pop = nuro.Population(size=10, dynamics="lif", params={"tau": 10e-3})
+
+conn = nuro.Connection(source=input_pop, target=output_pop, pattern="dense", plasticity="stdp")
+graph = nuro.Graph([input_pop, output_pop], [conn])
+
+model = nuro.compile(graph, target="gpu")
+model.run(duration=1.0)
+
+print(f"Total spikes: {model.metrics['total_spikes']}")
+```
+
+### Custom Input
+
+```python
+import torch
+import nuro
+
+pop = nuro.Population(size=50, dynamics="lif")
+out = nuro.Population(size=10, dynamics="lif")
+conn = nuro.Connection(source=pop, target=out, pattern="dense")
+
+# Option 1: Static tensor (num_steps, pop_size)
+inp = nuro.Input(population=pop, data=torch.rand(1000, 50))
+
+# Option 2: Generator function
+inp = nuro.Input(population=pop, generator=lambda step: (torch.rand(50) < 0.1).float())
+
+# Option 3: Configurable Poisson rate
+inp = nuro.Input(population=pop, mode="poisson", rate=100.0)
+
+graph = nuro.Graph([pop, out], [conn], inputs=[inp])
+```
+
+### Biologically Realistic Neurons
+
+```python
+import nuro
+
+# Izhikevich with preset firing patterns
+exc = nuro.Population(size=800, dynamics="izhikevich", params={"preset": "regular_spiking"})
+inh = nuro.Population(size=200, dynamics="izhikevich", params={"preset": "fast_spiking"})
+
+# Adaptive Exponential IF
+adex = nuro.Population(size=100, dynamics="adex")
+
+# Or raw Izhikevich parameters
+custom = nuro.Population(size=50, dynamics="izhikevich", params={"a": 0.02, "b": 0.2, "c": -50.0, "d": 2.0})
+```
+
+**Available Izhikevich presets:** `regular_spiking`, `intrinsically_bursting`, `chattering`, `fast_spiking`, `low_threshold_spiking`
+
+### Recurrent Networks
+
+```python
+import nuro
+
+exc = nuro.Population(size=400, dynamics="lif", params={"tau": 20e-3})
+inh = nuro.Population(size=100, dynamics="lif", params={"tau": 10e-3})
+
+conn_ei = nuro.Connection(source=exc, target=inh, pattern="dense")
+conn_ie = nuro.Connection(source=inh, target=exc, pattern="dense")
+
+graph = nuro.Graph([exc, inh], [conn_ei, conn_ie])
+print(graph.is_cyclic)  # True — Nuro handles this automatically
+```
+
+### State Recording
+
+```python
+model = nuro.compile(graph, target="gpu")
+model.record("voltages", population=output_pop)
+model.record("spikes", population=output_pop)
+model.record("weights", connection=conn, interval=100)
+
+model.run(duration=1.0)
+
+v = model.get_state("voltages", population=output_pop)   # (1000, pop_size)
+s = model.get_state("spikes", population=output_pop)     # (1000, pop_size)
+w = model.get_state("weights", connection=conn)           # (10, out, in)
+```
+
+### Checkpointing
+
+```python
+# Save after training
+model.run(duration=10.0)
+model.save("trained_network.pt")
+
+# Load later
+loaded = nuro.load("trained_network.pt")
+loaded.run(duration=1.0)
+```
+
+## Examples
+
+See [`examples/basics/`](examples/basics/) for complete runnable scripts:
+
+| Example | What it shows |
+|---------|--------------|
+| [`custom_input.py`](examples/basics/custom_input.py) | Static tensors, generators, custom Poisson rates |
+| [`state_recording.py`](examples/basics/state_recording.py) | Recording voltages, spikes, and weight snapshots |
+| [`izhikevich_network.py`](examples/basics/izhikevich_network.py) | Izh presets, AdEx, mixed-dynamics networks |
+| [`recurrent_network.py`](examples/basics/recurrent_network.py) | Mutual inhibition, ring circuits, recurrent Izh |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  API Layer                                          │
+│  Population · Connection · Input · Graph · compile  │
+├─────────────────────────────────────────────────────┤
+│  Intermediate Representation                        │
+│  DynamicsNode · SynapticEdge · IRGraph              │
+├─────────────────────────────────────────────────────┤
+│  Backends                                           │
+│  GPU (SpikingJelly) · Loihi (planned) · more        │
+└─────────────────────────────────────────────────────┘
+```
+
+**Neuron models:** LIF, IF, Izhikevich, AdEx
+**Connectivity:** Dense, Random Sparse
+**Plasticity:** STDP (trace-based)
+**Graph types:** DAG (topological sort) and Cyclic (Jacobi iteration)
+
+## Roadmap
+
+| Version | Status | Features |
+|---------|--------|----------|
+| **v0.1.0** | Done | Core API, IR, GPU backend, LIF/IF, STDP |
+| **v0.2.0** | **Current** | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing |
+| **v0.3.0** | Next | Batch support, multi-GPU, performance benchmarks |
+| **v0.4.0** | Planned | Intel Loihi backend (via Lava) |
+| **v0.5.0** | Planned | SpiNNaker 2 backend, alternative plasticity rules |
+| **v1.0.0** | Planned | Stable API, documentation site, model zoo |
+
+## Testing
+
+```bash
+pip install -e ".[gpu,dev]"
+pytest tests/ -v
+```
+
+77 tests covering the full stack: API validation, IR lowering, GPU execution, neuron models, recurrent graphs, state recording, and checkpointing.
+
+## Early Access
+
+Nuro is in active development. We're looking for early testers:
+
+- **SNN researchers** who want a cleaner API than raw SpikingJelly/Norse
+- **Neuromorphic engineers** with Loihi/SpiNNaker access to help build backends
+- **ML engineers** curious about spiking networks for edge deployment
+
+**How to get involved:**
+1. Clone the repo and try the [examples](examples/basics/)
+2. Open an [issue](https://github.com/Vantar-AI/nuro/issues) with feedback, bugs, or feature requests
+3. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup
+
+We especially want to hear: *What would make you switch from your current SNN framework?*
 
 ## License
 
-Apache 2.0 — Free to use, modify, and distribute. The core SDK will always be open.
+Apache 2.0 — Free to use, modify, and distribute.
 
 ---
 
 <div align="center">
 
-**Vantar AI** — The CUDA of post-Von Neumann computing.
+**[Vantar AI](https://vantar.ai)** — Building the universal substrate for neural computation.
 
-[Website](https://vantar.ai) · [Research](https://github.com/Vantar-AI/research) · [Examples](https://github.com/Vantar-AI/nuro-examples)
+[GitHub](https://github.com/Vantar-AI/nuro) · [Issues](https://github.com/Vantar-AI/nuro/issues) · [Examples](examples/basics/)
 
 </div>

@@ -12,6 +12,7 @@ from nuro.backends.base import Backend, CompiledModel
 from nuro.backends.gpu.connectivity import build_synapse_layer
 from nuro.backends.gpu.dynamics import build_neuron_layer
 from nuro.backends.gpu.plasticity import STDPUpdater
+from nuro.backends.gpu.recorders import Recorder
 from nuro.ir import IRGraph
 from nuro.ir.edges import SynapticEdge
 
@@ -23,7 +24,11 @@ class NuroSNN(nn.Module):
         super().__init__()
         self.ir_graph = ir_graph
         self.dt = dt
-        self.pop_order = list(ir_graph.nodes.keys())
+        self._is_cyclic = ir_graph.is_cyclic
+        if self._is_cyclic:
+            self.pop_order = list(ir_graph.nodes.keys())
+        else:
+            self.pop_order = ir_graph.topological_order()
 
         # Build neuron layers
         self.neurons = nn.ModuleDict()
@@ -44,17 +49,21 @@ class NuroSNN(nn.Module):
         self,
         inputs: dict[str, torch.Tensor],
         source_ids: set[str],
+        prev_spikes: dict[str, torch.Tensor] | None = None,
     ) -> dict[str, torch.Tensor]:
         """Forward one timestep.
 
         Parameters
         ----------
         inputs : dict mapping population id → input tensor
-            External Poisson spike trains for source populations.
+            External spike trains for source populations.
         source_ids : set of str
             IDs of source populations (no incoming edges). These
             populations use the input tensor directly as spikes
             rather than feeding it through their neuron model.
+        prev_spikes : dict, optional
+            Previous timestep's spikes for all populations. Used only
+            for cyclic graphs (Jacobi iteration).
 
         Returns
         -------
@@ -62,20 +71,24 @@ class NuroSNN(nn.Module):
         """
         spikes: dict[str, torch.Tensor] = {}
 
+        # For cyclic graphs, use prev_spikes as the source for synaptic
+        # input lookups (Jacobi: all populations see the *previous* step).
+        # For DAGs, use the current step's spikes (already computed in
+        # topological order).
+        lookup = prev_spikes if (self._is_cyclic and prev_spikes) else spikes
+
         for nid in self.pop_order:
             if nid in source_ids and nid in inputs:
-                # Source populations: use Poisson spikes directly
                 spikes[nid] = inputs[nid]
                 continue
 
-            # Gather synaptic input from upstream populations
             device = self._get_device()
             x = torch.zeros(self.ir_graph.nodes[nid].size, device=device)
 
             for src_id in self.pop_order:
                 key = f"{src_id}__{nid}"
-                if key in self.synapses and src_id in spikes:
-                    x = x + self.synapses[key](spikes[src_id])
+                if key in self.synapses and src_id in lookup:
+                    x = x + self.synapses[key](lookup[src_id])
 
             spikes[nid] = self.neurons[nid](x)
 
@@ -97,6 +110,7 @@ class GPUCompiledModel(CompiledModel):
         self._metrics: dict[str, Any] = {}
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._snn.to(self._device)
+        self._recorder = Recorder()
 
         # Build STDP updaters for edges with plasticity="stdp"
         self._stdp_updaters: list[tuple[str, str, STDPUpdater]] = []
@@ -118,26 +132,49 @@ class GPUCompiledModel(CompiledModel):
         targets = {e.target_id for e in self._ir_graph.edges}
         source_id_set = {nid for nid in self._ir_graph.nodes if nid not in targets}
 
+        # Build input lookup from IR inputs
+        input_specs: dict[str, Any] = {}
+        for inp in self._ir_graph.inputs:
+            input_specs[inp.id] = inp
+
+        # Populations that need external input: source pops (no incoming edges)
+        # plus any pop with an explicit Input spec (even in cyclic graphs)
+        driven_ids = source_id_set | set(input_specs.keys())
+
         spike_counts: dict[str, int] = {nid: 0 for nid in self._ir_graph.nodes}
         total_spikes = 0
+        prev_spikes: dict[str, torch.Tensor] | None = None
 
         with torch.no_grad():
             for _step in range(num_steps):
-                # Generate Poisson spike trains for source populations.
-                # Each neuron fires independently with probability rate * dt.
                 inputs: dict[str, torch.Tensor] = {}
-                for sid in source_id_set:
-                    size = self._ir_graph.nodes[sid].size
-                    rate = 50.0  # 50 Hz Poisson rate
-                    prob = rate * dt
-                    spk = (torch.rand(size, device=self._device) < prob).float()
-                    inputs[sid] = spk
+                for sid in driven_ids:
+                    spec = input_specs.get(sid)
+                    if spec is not None and spec.data is not None:
+                        # Static tensor input
+                        row = min(_step, spec.data.shape[0] - 1)
+                        inputs[sid] = spec.data[row].to(self._device).float()
+                    elif spec is not None and spec.generator is not None:
+                        # Generator input
+                        inputs[sid] = spec.generator(_step).to(self._device).float()
+                    else:
+                        # Poisson mode (default or explicit)
+                        rate = spec.rate if spec is not None else 50.0
+                        size = self._ir_graph.nodes[sid].size
+                        prob = rate * dt
+                        spk = (torch.rand(size, device=self._device) < prob).float()
+                        inputs[sid] = spk
 
-                spikes = self._snn(inputs, source_id_set)
+                spikes = self._snn(inputs, driven_ids, prev_spikes)
+                prev_spikes = spikes
 
                 # STDP update
                 for src_id, tgt_id, updater in self._stdp_updaters:
                     updater.step(spikes[src_id], spikes[tgt_id])
+
+                # State recording
+                if self._recorder.has_probes:
+                    self._recorder.record_step(_step, spikes, self._snn)
 
                 # Accumulate metrics
                 for nid, spk in spikes.items():
@@ -153,10 +190,77 @@ class GPUCompiledModel(CompiledModel):
             "dt": dt,
         }
 
+    def record(
+        self,
+        name: str,
+        *,
+        population: Any = None,
+        connection: Any = None,
+        interval: int = 1,
+    ) -> None:
+        """Register a state probe before calling ``run()``.
+
+        Parameters
+        ----------
+        name : str
+            What to record: ``"voltages"``, ``"spikes"``, or ``"weights"``.
+        population : Population, optional
+            Target population (for ``"voltages"`` and ``"spikes"``).
+        connection : Connection, optional
+            Target connection (for ``"weights"``).
+        interval : int
+            Record every *interval* steps.
+        """
+        pop_id = getattr(population, "id", None)
+        conn_key = None
+        if connection is not None:
+            conn_key = f"{connection.source.id}__{connection.target.id}"
+        self._recorder.add_probe(
+            name, population_id=pop_id, connection_key=conn_key, interval=interval
+        )
+
+    def get_state(self, name: str, **kwargs: Any) -> Any:
+        """Retrieve recorded state as a tensor.
+
+        Parameters
+        ----------
+        name : str
+            The probe name (e.g. ``"voltages"``).
+        population : Population, optional
+            Target population.
+        connection : Connection, optional
+            Target connection.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(num_recordings, ...)``.
+        """
+        population = kwargs.get("population")
+        connection = kwargs.get("connection")
+        pop_id = getattr(population, "id", None)
+        conn_key = None
+        if connection is not None:
+            conn_key = f"{connection.source.id}__{connection.target.id}"
+        return self._recorder.get(name, population_id=pop_id, connection_key=conn_key)
+
+    def save(self, path: str) -> None:
+        """Save model weights and graph to a checkpoint file.
+
+        Parameters
+        ----------
+        path : str
+            File path (e.g. ``"checkpoint.pt"``).
+        """
+        from nuro.backends.gpu.checkpoint import save_checkpoint
+
+        save_checkpoint(self, path)
+
     def reset(self) -> None:
         functional.reset_net(self._snn)
         for updater_tuple in self._stdp_updaters:
             updater_tuple[2].reset()
+        self._recorder.reset()
         self._metrics = {}
 
     @property
