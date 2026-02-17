@@ -8,8 +8,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.4.0)
-[![Tests](https://img.shields.io/badge/tests-109%20passing-brightgreen.svg)](#testing)
+[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.5.0)
+[![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)](#testing)
 [![Website](https://img.shields.io/badge/website-vantar.xyz-white.svg)](https://vantar.xyz)
 
 </div>
@@ -70,9 +70,13 @@ The neuromorphic ecosystem is fragmented. SpikingJelly, Lava, BrainPy, Norse —
 git clone https://github.com/Vantar-AI/nuro.git
 cd nuro
 pip install -e ".[gpu,dev]"
+
+# With Loihi backend (requires lava-nc)
+pip install -e ".[gpu,loihi,dev]"
 ```
 
 **Requirements:** Python 3.10+, PyTorch 2.0+, SpikingJelly 0.0.0.0.14+
+**Optional:** Lava-nc 0.9+ (for Loihi backend)
 
 ## Quick Start
 
@@ -211,6 +215,26 @@ optimizer.step()
 
 **Available surrogates:** `"atan"` (default), `"sigmoid"`, `"triangular"`
 
+### Deploy to Loihi
+
+```python
+import nuro
+
+# Train on GPU
+gpu_model = nuro.compile(graph, target="gpu", requires_grad=True)
+# ... training loop ...
+gpu_model.save("trained.pt")
+
+# Deploy to Loihi (one line change)
+loihi_model = nuro.compile(graph, target="loihi", weights_from="trained.pt")
+loihi_model.record("spikes", population=motor)
+loihi_model.run(duration=1.0)
+
+# Switch to real hardware (requires INRC access)
+# from lava.magma.core.run_configs import Loihi2HwCfg
+# loihi_model.set_run_config(Loihi2HwCfg())
+```
+
 ### Checkpointing
 
 ```python
@@ -235,6 +259,7 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 | [`recurrent_network.py`](examples/basics/recurrent_network.py) | Mutual inhibition, ring circuits, recurrent Izh |
 | [`batched_simulation.py`](examples/basics/batched_simulation.py) | 32 parallel trials, cross-trial variance analysis |
 | [`train_xor.py`](examples/training/train_xor.py) | XOR training with surrogate gradients and Adam optimizer |
+| [`deploy_to_loihi.py`](examples/deployment/deploy_to_loihi.py) | Train on GPU → deploy to Loihi (sim or hardware) |
 
 ## Architecture
 
@@ -247,7 +272,7 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 │  DynamicsNode · SynapticEdge · IRGraph              │
 ├─────────────────────────────────────────────────────┤
 │  Backends                                           │
-│  GPU (SpikingJelly) · Loihi (planned) · more        │
+│  GPU (SpikingJelly) · Loihi (Lava) · more           │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -256,7 +281,7 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 **Connectivity:** Dense, Random Sparse
 **Plasticity:** STDP (trace-based)
 **Graph types:** DAG (topological sort) and Cyclic (Jacobi iteration)
-**Backends:** GPU (SpikingJelly) — Loihi (Lava, planned) — SpiNNaker (planned)
+**Backends:** GPU (SpikingJelly) — Loihi (Lava) — SpiNNaker (planned)
 
 ## Roadmap
 
@@ -265,8 +290,8 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 | **v0.1.0** | Done | Core API, IR, GPU backend, LIF/IF, STDP |
 | **v0.2.0** | Done | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing |
 | **v0.3.0** | Done | Batch support, performance benchmarks |
-| **v0.4.0** | **Current** | Surrogate gradients, BPTT training, differentiable neurons |
-| **v0.5.0** | Next | Intel Loihi 2 backend (Lava), weight transfer GPU→Loihi, train→deploy workflow |
+| **v0.4.0** | Done | Surrogate gradients, BPTT training, differentiable neurons |
+| **v0.5.0** | **Current** | Intel Loihi 2 backend (Lava), weight transfer GPU→Loihi, train→deploy workflow |
 | **v0.6.0** | Planned | SpiNNaker 2 backend, custom neuron dynamics on Loihi NeuroCores |
 | **v0.7.0** | Planned | Vantar Cloud — remote compile and deploy to neuromorphic hardware |
 | **v1.0.0** | Planned | Stable API, documentation site, model zoo |
@@ -278,7 +303,7 @@ pip install -e ".[gpu,dev]"
 pytest tests/ -v
 ```
 
-109 tests covering the full stack: API validation, IR lowering, GPU execution, neuron models, recurrent graphs, state recording, checkpointing, batch support, and gradient training.
+121 tests covering the full stack: API validation, IR lowering, GPU execution, Loihi deployment, neuron models, recurrent graphs, state recording, checkpointing, batch support, gradient training, and weight transfer.
 
 ## The Vision
 

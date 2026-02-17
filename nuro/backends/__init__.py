@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 _REGISTRY: dict[str, str] = {
     "gpu": "nuro.backends.gpu.backend:GPUBackend",
+    "loihi": "nuro.backends.loihi.backend:LoihiBackend",
 }
 
 

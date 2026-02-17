@@ -14,6 +14,7 @@ def compile(
     *,
     requires_grad: bool = False,
     surrogate: str = "atan",
+    weights_from: str | None = None,
 ) -> CompiledModel:
     """Compile a Graph to a runnable model on the specified backend.
 
@@ -31,6 +32,10 @@ def compile(
     surrogate : str
         Surrogate gradient function name (``"atan"``, ``"sigmoid"``,
         ``"triangular"``).  Only used when ``requires_grad=True``.
+    weights_from : str, optional
+        Path to a GPU checkpoint file (``.pt``).  When provided, trained
+        weights are loaded and transferred to the target backend.  This
+        enables the train-on-GPU → deploy-to-hardware workflow.
 
     Returns
     -------
@@ -43,5 +48,8 @@ def compile(
     ir_graph = IRGraph.from_api_graph(graph)
     backend = get_backend(target)
     return backend.compile(
-        ir_graph, requires_grad=requires_grad, surrogate=surrogate
+        ir_graph,
+        requires_grad=requires_grad,
+        surrogate=surrogate,
+        weights_from=weights_from,
     )

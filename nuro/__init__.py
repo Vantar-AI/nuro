@@ -1,6 +1,6 @@
 """Nuro — The universal programming language for neuromorphic, thermodynamic, and biological computing."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from nuro.api.compile import compile
 from nuro.api.connection import Connection

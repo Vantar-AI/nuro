@@ -2,6 +2,27 @@
 
 All notable changes to Nuro are documented here.
 
+## [0.5.0] - 2026-02-17
+
+### Added
+- **Intel Loihi 2 backend** — `nuro.compile(graph, target="loihi")` compiles to Lava SDK Process graphs
+- Loihi neuron mapping: LIF → Lava LIF, IF → Lava LIF (no leak), Izhikevich/AdEx → simulation-only custom Processes
+- `LoihiCompiledModel.run()` executes on Loihi1SimCfg (floating-point simulation) by default
+- `set_run_config()` for switching to hardware execution (`Loihi2HwCfg`)
+- **Weight transfer** — `weights_from="checkpoint.pt"` loads GPU-trained weights into Loihi Dense processes
+- `compile()` accepts `weights_from` kwarg for the train-on-GPU → deploy-to-hardware workflow
+- Input system: static tensors and Poisson rates via Lava RingBuffer; generator inputs raise clear error
+- State recording via Lava Monitor processes (voltages, spikes, weights)
+- Izhikevich/AdEx emit warnings when compiled to Loihi (simulation-only, no hardware support)
+- New example: `examples/deployment/deploy_to_loihi.py` — full train→deploy workflow
+- 12 new Loihi tests (all skip gracefully when `lava-nc` is not installed)
+- `[loihi]` optional dependency: `pip install nuro[loihi]`
+
+### Changed
+- `compile()` signature now includes `weights_from` keyword argument
+- Backend registry includes `"loihi"` target
+- `test_compile.py` updated for v0.5.0 version check
+
 ## [0.4.0] - 2026-02-17
 
 ### Added

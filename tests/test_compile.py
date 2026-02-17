@@ -33,7 +33,7 @@ class TestCompile:
         p1 = nuro.Population(size=10)
         graph = nuro.Graph([p1], [])
         with pytest.raises(ValueError, match="Unknown backend"):
-            nuro.compile(graph, target="loihi")
+            nuro.compile(graph, target="spinnaker")
 
     def test_version(self):
-        assert nuro.__version__ == "0.4.0"
+        assert nuro.__version__ == "0.5.0"
