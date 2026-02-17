@@ -10,6 +10,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from nuro.backends.gpu.surrogates import SurrogateSpike
+
 
 class IzhikevichNode(nn.Module):
     """Izhikevich neuron model (Euler integration).
@@ -33,6 +35,10 @@ class IzhikevichNode(nn.Module):
         Spike threshold (mV).  Default 30.
     dt : float
         Simulation timestep in seconds.  Converted internally to ms.
+    surrogate_function : callable or None
+        When provided, spike detection uses surrogate gradients for
+        differentiable training.  When ``None`` (default), uses hard
+        threshold (original behaviour).
     """
 
     PRESETS: dict[str, dict[str, float]] = {
@@ -52,6 +58,7 @@ class IzhikevichNode(nn.Module):
         d: float = 8.0,
         v_thresh: float = 30.0,
         dt: float = 1e-3,
+        surrogate_function=None,
     ) -> None:
         super().__init__()
         self.size = size
@@ -61,6 +68,7 @@ class IzhikevichNode(nn.Module):
         self.d = d
         self.v_thresh = v_thresh
         self.dt_ms = dt * 1000.0  # convert to ms for Izhikevich timescale
+        self.surrogate_function = surrogate_function
 
         # State
         self.register_buffer("v", torch.full((size,), c))
@@ -88,8 +96,13 @@ class IzhikevichNode(nn.Module):
             self.v = self.v + dv
             self.u = self.u + du
 
-        # Spike detection and reset
-        fired = (self.v >= self.v_thresh).float()
+        # Spike detection — surrogate or hard threshold
+        if self.surrogate_function is not None:
+            fired = SurrogateSpike.apply(self.v - self.v_thresh, self.surrogate_function)
+        else:
+            fired = (self.v >= self.v_thresh).float()
+
+        # Reset (detached — only spike detection needs the surrogate)
         self.v = torch.where(fired.bool(), torch.tensor(self.c, device=self.v.device), self.v)
         self.u = torch.where(fired.bool(), self.u + self.d, self.u)
 
@@ -136,6 +149,8 @@ class AdExNode(nn.Module):
         Spike cutoff potential (mV). Default -40.4.
     dt : float
         Simulation timestep in seconds.
+    surrogate_function : callable or None
+        When provided, spike detection uses surrogate gradients.
     """
 
     def __init__(
@@ -152,6 +167,7 @@ class AdExNode(nn.Module):
         V_reset: float = -70.6,
         V_cutoff: float = -40.4,
         dt: float = 1e-3,
+        surrogate_function=None,
     ) -> None:
         super().__init__()
         self.size = size
@@ -166,6 +182,7 @@ class AdExNode(nn.Module):
         self.V_reset = V_reset
         self.V_cutoff = V_cutoff
         self.dt_ms = dt * 1000.0
+        self.surrogate_function = surrogate_function
 
         self.register_buffer("v", torch.full((size,), E_L))
         self.register_buffer("w", torch.zeros(size))
@@ -196,8 +213,13 @@ class AdExNode(nn.Module):
         dw = (self.a_adapt * (self.v - self.E_L) - self.w) / self.tau_w * h
         self.w = self.w + dw
 
-        # Spike detection and reset
-        fired = (self.v >= self.V_cutoff).float()
+        # Spike detection — surrogate or hard threshold
+        if self.surrogate_function is not None:
+            fired = SurrogateSpike.apply(self.v - self.V_cutoff, self.surrogate_function)
+        else:
+            fired = (self.v >= self.V_cutoff).float()
+
+        # Reset (detached — only spike detection needs the surrogate)
         self.v = torch.where(fired.bool(), torch.tensor(self.V_reset, device=self.v.device), self.v)
         self.w = torch.where(fired.bool(), self.w + self.b_adapt, self.w)
 

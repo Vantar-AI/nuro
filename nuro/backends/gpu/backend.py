@@ -20,7 +20,9 @@ from nuro.ir.edges import SynapticEdge
 class NuroSNN(nn.Module):
     """A spiking neural network built from an IRGraph."""
 
-    def __init__(self, ir_graph: IRGraph, dt: float) -> None:
+    def __init__(
+        self, ir_graph: IRGraph, dt: float, surrogate_function=None
+    ) -> None:
         super().__init__()
         self.ir_graph = ir_graph
         self.dt = dt
@@ -33,7 +35,9 @@ class NuroSNN(nn.Module):
         # Build neuron layers
         self.neurons = nn.ModuleDict()
         for nid, node in ir_graph.nodes.items():
-            self.neurons[nid] = build_neuron_layer(node, dt)
+            self.neurons[nid] = build_neuron_layer(
+                node, dt, surrogate_function=surrogate_function
+            )
 
         # Build synapse layers
         self.synapses = nn.ModuleDict()
@@ -113,10 +117,13 @@ class NuroSNN(nn.Module):
 class GPUCompiledModel(CompiledModel):
     """A compiled model that runs on GPU (or CPU fallback) via SpikingJelly."""
 
-    def __init__(self, snn: NuroSNN, ir_graph: IRGraph) -> None:
+    def __init__(
+        self, snn: NuroSNN, ir_graph: IRGraph, requires_grad: bool = False
+    ) -> None:
         self._snn = snn
         self._ir_graph = ir_graph
         self._metrics: dict[str, Any] = {}
+        self._requires_grad = requires_grad
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._snn.to(self._device)
         self._recorder = Recorder()
@@ -130,7 +137,12 @@ class GPUCompiledModel(CompiledModel):
                 updater = STDPUpdater(synapse)
                 self._stdp_updaters.append((edge.source_id, edge.target_id, updater))
 
-    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1) -> None:
+    @property
+    def snn(self) -> NuroSNN:
+        """Access the underlying SNN module (useful for optimizer param access)."""
+        return self._snn
+
+    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1):
         """Run the model for *duration* seconds with timestep *dt*.
 
         Parameters
@@ -143,6 +155,13 @@ class GPUCompiledModel(CompiledModel):
             Number of parallel trials. When 1 (default), tensors have no
             batch dimension for full backward compatibility. When > 1,
             all internal tensors gain a leading ``(batch,)`` dimension.
+
+        Returns
+        -------
+        None or dict[str, Tensor]
+            When ``requires_grad=True``, returns a dict mapping population
+            id to the **sum of output spikes** over time (shape matches
+            the population tensor shape).  Use this for loss computation.
         """
         num_steps = int(duration / dt)
         functional.reset_net(self._snn)
@@ -170,7 +189,14 @@ class GPUCompiledModel(CompiledModel):
         total_spikes = 0
         prev_spikes: dict[str, torch.Tensor] | None = None
 
-        with torch.no_grad():
+        # Accumulate output spikes for loss computation when training
+        output_accum: dict[str, torch.Tensor] | None = None
+        if self._requires_grad:
+            output_accum = {}
+
+        def _step_loop():
+            nonlocal prev_spikes, total_spikes, output_accum
+
             for _step in range(num_steps):
                 inputs: dict[str, torch.Tensor] = {}
                 for sid in driven_ids:
@@ -196,19 +222,34 @@ class GPUCompiledModel(CompiledModel):
                 spikes = self._snn(inputs, driven_ids, prev_spikes, batch_size)
                 prev_spikes = spikes
 
-                # STDP update
-                for src_id, tgt_id, updater in self._stdp_updaters:
-                    updater.step(spikes[src_id], spikes[tgt_id])
+                # STDP update — skip when training (competing gradient updates)
+                if not self._requires_grad:
+                    for src_id, tgt_id, updater in self._stdp_updaters:
+                        updater.step(spikes[src_id], spikes[tgt_id])
 
                 # State recording
                 if self._recorder.has_probes:
                     self._recorder.record_step(_step, spikes, self._snn)
 
-                # Accumulate metrics (sum across batch)
+                # Accumulate output spikes for training
+                if output_accum is not None:
+                    for nid, spk in spikes.items():
+                        if nid in output_accum:
+                            output_accum[nid] = output_accum[nid] + spk
+                        else:
+                            output_accum[nid] = spk.clone()
+
+                # Accumulate metrics (detached to avoid graph bloat)
                 for nid, spk in spikes.items():
-                    count = int(spk.sum().item())
+                    count = int(spk.detach().sum().item())
                     spike_counts[nid] += count
                     total_spikes += count
+
+        if self._requires_grad:
+            _step_loop()
+        else:
+            with torch.no_grad():
+                _step_loop()
 
         self._metrics = {
             "total_spikes": total_spikes,
@@ -218,6 +259,10 @@ class GPUCompiledModel(CompiledModel):
             "dt": dt,
             "batch_size": batch_size,
         }
+
+        if self._requires_grad:
+            return output_accum
+        return None
 
     def record(
         self,
@@ -301,6 +346,16 @@ class GPUCompiledModel(CompiledModel):
 class GPUBackend(Backend):
     """GPU backend using SpikingJelly (activation-based mode)."""
 
-    def compile(self, ir_graph: IRGraph, dt: float = 1e-3) -> GPUCompiledModel:
-        snn = NuroSNN(ir_graph, dt)
-        return GPUCompiledModel(snn, ir_graph)
+    def compile(
+        self, ir_graph: IRGraph, dt: float = 1e-3, **kwargs
+    ) -> GPUCompiledModel:
+        requires_grad = kwargs.get("requires_grad", False)
+        surrogate_name = kwargs.get("surrogate", "atan")
+
+        surrogate_function = None
+        if requires_grad:
+            from nuro.backends.gpu.surrogates import get_surrogate
+            surrogate_function = get_surrogate(surrogate_name)
+
+        snn = NuroSNN(ir_graph, dt, surrogate_function=surrogate_function)
+        return GPUCompiledModel(snn, ir_graph, requires_grad=requires_grad)

@@ -12,7 +12,7 @@ class CompiledModel(ABC):
     """A compiled, runnable model returned by a backend."""
 
     @abstractmethod
-    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1) -> None:
+    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1):
         """Run the model for *duration* seconds with timestep *dt*.
 
         Parameters
@@ -25,6 +25,13 @@ class CompiledModel(ABC):
             Number of parallel trials. When 1 (default), tensors have no
             batch dimension for full backward compatibility. When > 1,
             all internal tensors gain a leading ``(batch,)`` dimension.
+
+        Returns
+        -------
+        None or dict[str, Tensor]
+            When ``requires_grad=True``, returns a dict mapping population
+            id to output spike tensors (needed for loss computation).
+            Otherwise returns ``None``.
         """
 
     @abstractmethod
@@ -56,5 +63,5 @@ class Backend(ABC):
     """Base class for compilation backends."""
 
     @abstractmethod
-    def compile(self, ir_graph: IRGraph) -> CompiledModel:
+    def compile(self, ir_graph: IRGraph, **kwargs) -> CompiledModel:
         """Compile an IRGraph into a runnable model."""

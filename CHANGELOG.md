@@ -2,6 +2,28 @@
 
 All notable changes to Nuro are documented here.
 
+## [0.4.0] - 2026-02-17
+
+### Added
+- **Surrogate gradients** — `nuro.compile(graph, requires_grad=True)` enables backpropagation-through-time (BPTT)
+- `SurrogateSpike` autograd function with three built-in surrogates: ATan (default), sigmoid, triangular
+- Surrogate gradient support for all neuron models: LIF, IF, Izhikevich, AdEx
+- `surrogate` kwarg on `compile()` to select surrogate function (default: `"atan"`)
+- `run()` returns output spikes dict when `requires_grad=True` for loss computation
+- `model.snn` property for accessing the underlying `NuroSNN` module (needed for optimizers)
+- STDP automatically disabled during gradient training (avoids competing updates)
+- Metrics use `.detach()` to prevent computation graph bloat
+- New example: `examples/training/train_xor.py` — XOR with BPTT and Adam optimizer
+- New test file: `tests/test_gradients.py` with gradient flow, backward compat, and training loop tests
+
+### Changed
+- `compile()` accepts `requires_grad` and `surrogate` keyword arguments
+- `run()` return type is `None` (default) or `dict[str, Tensor]` (when training)
+- `build_neuron_layer()` accepts optional `surrogate_function` parameter
+- `IzhikevichNode` and `AdExNode` accept optional `surrogate_function` parameter
+- `NuroSNN.__init__` accepts `surrogate_function` and passes it to all neuron layers
+- `GPUBackend.compile()` accepts `**kwargs` for `requires_grad` and `surrogate`
+
 ## [0.3.0] - 2026-02-17
 
 ### Added

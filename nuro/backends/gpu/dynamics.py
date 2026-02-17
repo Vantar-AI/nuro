@@ -9,7 +9,9 @@ from nuro.backends.gpu.neurons import AdExNode, IzhikevichNode
 from nuro.ir.nodes import DynamicsNode
 
 
-def build_neuron_layer(node: DynamicsNode, dt: float) -> nn.Module:
+def build_neuron_layer(
+    node: DynamicsNode, dt: float, surrogate_function=None
+) -> nn.Module:
     """Build a neuron layer from an IR DynamicsNode.
 
     Parameters
@@ -18,6 +20,11 @@ def build_neuron_layer(node: DynamicsNode, dt: float) -> nn.Module:
         The IR node specifying dynamics and parameters.
     dt : float
         Simulation timestep in seconds. Used to convert time constants.
+    surrogate_function : callable or None
+        When provided, the neuron layer uses surrogate gradients for
+        differentiable spike generation.  For SpikingJelly neurons (LIF/IF)
+        this is passed as ``surrogate_function``.  For custom neurons
+        (Izhikevich/AdEx) it is stored and used via ``SurrogateSpike.apply``.
 
     Returns
     -------
@@ -27,9 +34,15 @@ def build_neuron_layer(node: DynamicsNode, dt: float) -> nn.Module:
     if node.dynamics == "lif":
         tau_sec = node.params.get("tau", 20e-3)
         tau_sj = tau_sec / dt
-        return neuron.LIFNode(tau=tau_sj, step_mode="s")
+        kwargs = dict(tau=tau_sj, step_mode="s")
+        if surrogate_function is not None:
+            kwargs["surrogate_function"] = surrogate_function
+        return neuron.LIFNode(**kwargs)
     elif node.dynamics == "if":
-        return neuron.IFNode(step_mode="s")
+        kwargs = dict(step_mode="s")
+        if surrogate_function is not None:
+            kwargs["surrogate_function"] = surrogate_function
+        return neuron.IFNode(**kwargs)
     elif node.dynamics == "izhikevich":
         # Accept preset name or raw a/b/c/d params
         preset = node.params.get("preset")
@@ -40,12 +53,16 @@ def build_neuron_layer(node: DynamicsNode, dt: float) -> nn.Module:
         for k in ("a", "b", "c", "d", "v_thresh"):
             if k in node.params:
                 kw[k] = node.params[k]
-        return IzhikevichNode(size=node.size, dt=dt, **kw)
+        return IzhikevichNode(
+            size=node.size, dt=dt, surrogate_function=surrogate_function, **kw
+        )
     elif node.dynamics == "adex":
         kw = {}
         for k in ("C", "g_L", "E_L", "V_T", "delta_T", "a", "b", "tau_w", "V_reset", "V_cutoff"):
             if k in node.params:
                 kw[k] = node.params[k]
-        return AdExNode(size=node.size, dt=dt, **kw)
+        return AdExNode(
+            size=node.size, dt=dt, surrogate_function=surrogate_function, **kw
+        )
     else:
         raise ValueError(f"GPU backend does not support dynamics '{node.dynamics}'")
