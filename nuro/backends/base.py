@@ -12,8 +12,20 @@ class CompiledModel(ABC):
     """A compiled, runnable model returned by a backend."""
 
     @abstractmethod
-    def run(self, duration: float, dt: float = 1e-3) -> None:
-        """Run the model for *duration* seconds with timestep *dt*."""
+    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1) -> None:
+        """Run the model for *duration* seconds with timestep *dt*.
+
+        Parameters
+        ----------
+        duration : float
+            Simulation duration in seconds.
+        dt : float
+            Timestep in seconds.
+        batch_size : int
+            Number of parallel trials. When 1 (default), tensors have no
+            batch dimension for full backward compatibility. When > 1,
+            all internal tensors gain a leading ``(batch,)`` dimension.
+        """
 
     @abstractmethod
     def reset(self) -> None:

@@ -8,8 +8,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.2.0)
-[![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen.svg)](#testing)
+[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.3.0)
+[![Tests](https://img.shields.io/badge/tests-93%20passing-brightgreen.svg)](#testing)
 
 </div>
 
@@ -57,6 +57,7 @@ The neuromorphic ecosystem is fragmented. SpikingJelly, Lava, BrainPy, Norse —
 - **Bring your own data** — static tensors, generators, or configurable Poisson inputs
 - **Biologically realistic** — LIF, IF, Izhikevich, and AdEx neuron models out of the box
 - **Recurrent graphs** — feedback connections and cyclic topologies just work
+- **Batch support** — run N parallel trials with `model.run(batch_size=32)` for 10-50x speedups
 - **State inspection** — record voltages, spikes, and weight dynamics during simulation
 - **Checkpointing** — save and load trained networks with `model.save()` / `nuro.load()`
 
@@ -160,6 +161,27 @@ s = model.get_state("spikes", population=output_pop)     # (1000, pop_size)
 w = model.get_state("weights", connection=conn)           # (10, out, in)
 ```
 
+### Batched Simulation
+
+```python
+import nuro
+
+sensory = nuro.Population(size=100, dynamics="lif", params={"tau": 20e-3})
+motor = nuro.Population(size=20, dynamics="lif", params={"tau": 10e-3})
+conn = nuro.Connection(source=sensory, target=motor, pattern="dense")
+graph = nuro.Graph([sensory, motor], [conn])
+
+model = nuro.compile(graph, target="gpu")
+model.record("spikes", population=motor)
+
+# Run 32 independent trials in parallel
+model.run(duration=1.0, batch_size=32)
+
+spikes = model.get_state("spikes", population=motor)  # (1000, 32, 20)
+per_trial = spikes.sum(dim=(0, 2))  # spike count per trial
+print(f"Mean: {per_trial.mean():.0f}, Std: {per_trial.std():.0f}")
+```
+
 ### Checkpointing
 
 ```python
@@ -182,6 +204,7 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 | [`state_recording.py`](examples/basics/state_recording.py) | Recording voltages, spikes, and weight snapshots |
 | [`izhikevich_network.py`](examples/basics/izhikevich_network.py) | Izh presets, AdEx, mixed-dynamics networks |
 | [`recurrent_network.py`](examples/basics/recurrent_network.py) | Mutual inhibition, ring circuits, recurrent Izh |
+| [`batched_simulation.py`](examples/basics/batched_simulation.py) | 32 parallel trials, cross-trial variance analysis |
 
 ## Architecture
 
@@ -208,9 +231,9 @@ See [`examples/basics/`](examples/basics/) for complete runnable scripts:
 | Version | Status | Features |
 |---------|--------|----------|
 | **v0.1.0** | Done | Core API, IR, GPU backend, LIF/IF, STDP |
-| **v0.2.0** | **Current** | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing |
-| **v0.3.0** | Next | Batch support, multi-GPU, performance benchmarks |
-| **v0.4.0** | Planned | Intel Loihi backend (via Lava) |
+| **v0.2.0** | Done | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing |
+| **v0.3.0** | **Current** | Batch support, performance benchmarks |
+| **v0.4.0** | Next | Multi-GPU, surrogate gradients, Intel Loihi backend (via Lava) |
 | **v0.5.0** | Planned | SpiNNaker 2 backend, alternative plasticity rules |
 | **v1.0.0** | Planned | Stable API, documentation site, model zoo |
 
@@ -221,7 +244,7 @@ pip install -e ".[gpu,dev]"
 pytest tests/ -v
 ```
 
-77 tests covering the full stack: API validation, IR lowering, GPU execution, neuron models, recurrent graphs, state recording, and checkpointing.
+93 tests covering the full stack: API validation, IR lowering, GPU execution, neuron models, recurrent graphs, state recording, checkpointing, and batch support.
 
 ## Early Access
 

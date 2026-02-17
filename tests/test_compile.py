@@ -36,4 +36,4 @@ class TestCompile:
             nuro.compile(graph, target="loihi")
 
     def test_version(self):
-        assert nuro.__version__ == "0.2.0"
+        assert nuro.__version__ == "0.3.0"

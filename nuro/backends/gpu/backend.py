@@ -45,36 +45,41 @@ class NuroSNN(nn.Module):
             self.synapses[key] = build_synapse_layer(edge, source_node, target_node)
             self._edge_map[key] = edge
 
+    def init_state(self, batch_size: int) -> None:
+        """Initialize batched state buffers for custom neurons (Izh/AdEx).
+
+        Called once before the simulation loop when ``batch_size > 1``.
+        SpikingJelly neurons handle batching automatically via their
+        ``forward()`` method, so only custom neuron modules need this.
+        """
+        from nuro.backends.gpu.neurons import IzhikevichNode, AdExNode
+
+        for neuron_layer in self.neurons.values():
+            if isinstance(neuron_layer, (IzhikevichNode, AdExNode)):
+                neuron_layer.init_state(batch_size)
+
     def forward(
         self,
         inputs: dict[str, torch.Tensor],
         source_ids: set[str],
         prev_spikes: dict[str, torch.Tensor] | None = None,
+        batch_size: int = 1,
     ) -> dict[str, torch.Tensor]:
         """Forward one timestep.
 
         Parameters
         ----------
-        inputs : dict mapping population id → input tensor
+        inputs : dict mapping population id -> input tensor
             External spike trains for source populations.
         source_ids : set of str
-            IDs of source populations (no incoming edges). These
-            populations use the input tensor directly as spikes
-            rather than feeding it through their neuron model.
+            IDs of source populations (no incoming edges).
         prev_spikes : dict, optional
-            Previous timestep's spikes for all populations. Used only
-            for cyclic graphs (Jacobi iteration).
-
-        Returns
-        -------
-        dict mapping population id → spike tensor
+            Previous timestep's spikes for cyclic graphs.
+        batch_size : int
+            Number of parallel trials (1 = no batch dim).
         """
         spikes: dict[str, torch.Tensor] = {}
 
-        # For cyclic graphs, use prev_spikes as the source for synaptic
-        # input lookups (Jacobi: all populations see the *previous* step).
-        # For DAGs, use the current step's spikes (already computed in
-        # topological order).
         lookup = prev_spikes if (self._is_cyclic and prev_spikes) else spikes
 
         for nid in self.pop_order:
@@ -83,7 +88,11 @@ class NuroSNN(nn.Module):
                 continue
 
             device = self._get_device()
-            x = torch.zeros(self.ir_graph.nodes[nid].size, device=device)
+            pop_size = self.ir_graph.nodes[nid].size
+            if batch_size > 1:
+                x = torch.zeros(batch_size, pop_size, device=device)
+            else:
+                x = torch.zeros(pop_size, device=device)
 
             for src_id in self.pop_order:
                 key = f"{src_id}__{nid}"
@@ -121,12 +130,28 @@ class GPUCompiledModel(CompiledModel):
                 updater = STDPUpdater(synapse)
                 self._stdp_updaters.append((edge.source_id, edge.target_id, updater))
 
-    def run(self, duration: float, dt: float = 1e-3) -> None:
-        """Run the model for *duration* seconds with timestep *dt*."""
+    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1) -> None:
+        """Run the model for *duration* seconds with timestep *dt*.
+
+        Parameters
+        ----------
+        duration : float
+            Simulation duration in seconds.
+        dt : float
+            Timestep in seconds.
+        batch_size : int
+            Number of parallel trials. When 1 (default), tensors have no
+            batch dimension for full backward compatibility. When > 1,
+            all internal tensors gain a leading ``(batch,)`` dimension.
+        """
         num_steps = int(duration / dt)
         functional.reset_net(self._snn)
         for updater_tuple in self._stdp_updaters:
             updater_tuple[2].reset()
+
+        # Initialize batched state for custom neurons
+        if batch_size > 1:
+            self._snn.init_state(batch_size)
 
         # Identify source populations (no incoming edges)
         targets = {e.target_id for e in self._ir_graph.edges}
@@ -151,7 +176,7 @@ class GPUCompiledModel(CompiledModel):
                 for sid in driven_ids:
                     spec = input_specs.get(sid)
                     if spec is not None and spec.data is not None:
-                        # Static tensor input
+                        # Static tensor input: (steps, pop) or (steps, batch, pop)
                         row = min(_step, spec.data.shape[0] - 1)
                         inputs[sid] = spec.data[row].to(self._device).float()
                     elif spec is not None and spec.generator is not None:
@@ -162,10 +187,13 @@ class GPUCompiledModel(CompiledModel):
                         rate = spec.rate if spec is not None else 50.0
                         size = self._ir_graph.nodes[sid].size
                         prob = rate * dt
-                        spk = (torch.rand(size, device=self._device) < prob).float()
+                        if batch_size > 1:
+                            spk = (torch.rand(batch_size, size, device=self._device) < prob).float()
+                        else:
+                            spk = (torch.rand(size, device=self._device) < prob).float()
                         inputs[sid] = spk
 
-                spikes = self._snn(inputs, driven_ids, prev_spikes)
+                spikes = self._snn(inputs, driven_ids, prev_spikes, batch_size)
                 prev_spikes = spikes
 
                 # STDP update
@@ -176,7 +204,7 @@ class GPUCompiledModel(CompiledModel):
                 if self._recorder.has_probes:
                     self._recorder.record_step(_step, spikes, self._snn)
 
-                # Accumulate metrics
+                # Accumulate metrics (sum across batch)
                 for nid, spk in spikes.items():
                     count = int(spk.sum().item())
                     spike_counts[nid] += count
@@ -188,6 +216,7 @@ class GPUCompiledModel(CompiledModel):
             "num_steps": num_steps,
             "duration": duration,
             "dt": dt,
+            "batch_size": batch_size,
         }
 
     def record(
@@ -234,7 +263,8 @@ class GPUCompiledModel(CompiledModel):
         Returns
         -------
         torch.Tensor
-            Shape ``(num_recordings, ...)``.
+            Shape ``(num_recordings, ...)`` — when batched, spikes/voltages
+            are ``(num_recordings, batch, pop_size)``.
         """
         population = kwargs.get("population")
         connection = kwargs.get("connection")

@@ -66,6 +66,12 @@ class IzhikevichNode(nn.Module):
         self.register_buffer("v", torch.full((size,), c))
         self.register_buffer("u", torch.full((size,), b * c))
 
+    def init_state(self, batch_size: int) -> None:
+        """Re-initialize state buffers with a batch dimension."""
+        device = self.v.device
+        self.v = torch.full((batch_size, self.size), self.c, device=device)
+        self.u = torch.full((batch_size, self.size), self.b * self.c, device=device)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Integrate one timestep.  *x* is synaptic current (arbitrary units,
         scaled to the Izhikevich ~mV range)."""
@@ -90,8 +96,8 @@ class IzhikevichNode(nn.Module):
         return fired
 
     def reset(self) -> None:
-        self.v.fill_(self.c)
-        self.u.fill_(self.b * self.c)
+        self.v = torch.full((self.size,), self.c, device=self.v.device)
+        self.u = torch.full((self.size,), self.b * self.c, device=self.v.device)
 
 
 class AdExNode(nn.Module):
@@ -164,6 +170,12 @@ class AdExNode(nn.Module):
         self.register_buffer("v", torch.full((size,), E_L))
         self.register_buffer("w", torch.zeros(size))
 
+    def init_state(self, batch_size: int) -> None:
+        """Re-initialize state buffers with a batch dimension."""
+        device = self.v.device
+        self.v = torch.full((batch_size, self.size), self.E_L, device=device)
+        self.w = torch.zeros(batch_size, self.size, device=device)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Integrate one timestep. *x* is synaptic current (scaled internally)."""
         # Scale input: binary spikes → current in pA range
@@ -192,5 +204,5 @@ class AdExNode(nn.Module):
         return fired
 
     def reset(self) -> None:
-        self.v.fill_(self.E_L)
-        self.w.fill_(0.0)
+        self.v = torch.full((self.size,), self.E_L, device=self.v.device)
+        self.w = torch.zeros(self.size, device=self.v.device)
