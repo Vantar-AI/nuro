@@ -17,6 +17,7 @@ def _import_lava():
     from lava.magma.core.model.py.type import LavaPyType
     from lava.magma.core.decorator import implements, requires, tag
     from lava.magma.core.resources import CPU
+    from lava.magma.core.sync.protocols.loihi_protocol import LoihiProtocol
 
     return {
         "AbstractProcess": AbstractProcess,
@@ -31,6 +32,7 @@ def _import_lava():
         "requires": requires,
         "tag": tag,
         "CPU": CPU,
+        "LoihiProtocol": LoihiProtocol,
     }
 
 
@@ -64,7 +66,7 @@ def build_izhikevich_process(size: int, params: dict, dt: float):
             self.d_param = lava["Var"](shape=(1,), init=d)
             self.vth = lava["Var"](shape=(1,), init=v_thresh)
 
-    @lava["implements"](proc=IzhikevichProcess, protocol=lava["PyLoihiProcessModel"].__class__)
+    @lava["implements"](proc=IzhikevichProcess, protocol=lava["LoihiProtocol"])
     @lava["requires"](lava["CPU"])
     @lava["tag"]("floating_pt")
     class PyIzhikevichModel(lava["PyLoihiProcessModel"]):
@@ -128,7 +130,7 @@ def build_adex_process(size: int, params: dict, dt: float):
             self.v = lava["Var"](shape=shape, init=E_L)
             self.w = lava["Var"](shape=shape, init=0.0)
 
-    @lava["implements"](proc=AdExProcess, protocol=lava["PyLoihiProcessModel"].__class__)
+    @lava["implements"](proc=AdExProcess, protocol=lava["LoihiProtocol"])
     @lava["requires"](lava["CPU"])
     @lava["tag"]("floating_pt")
     class PyAdExModel(lava["PyLoihiProcessModel"]):

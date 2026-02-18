@@ -134,6 +134,10 @@ class LoihiCompiledModel(CompiledModel):
         # Execute
         root.run(condition=RunSteps(num_steps=num_steps), run_cfg=run_cfg)
 
+        # Collect all probe data before stopping the runtime
+        if self._recorder.has_probes:
+            self._recorder.collect_all()
+
         # Collect metrics
         spike_counts: dict[str, int] = {}
         total_spikes = 0

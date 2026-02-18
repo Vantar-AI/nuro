@@ -17,6 +17,7 @@ class LoihiRecorder:
     def __init__(self) -> None:
         self._probe_specs: list[dict[str, Any]] = []
         self._monitors: dict[str, Any] = {}  # key → Lava Monitor
+        self._data_cache: dict[str, np.ndarray] = {}  # key → collected array
 
     @property
     def has_probes(self) -> bool:
@@ -91,6 +92,32 @@ class LoihiRecorder:
                 monitor.probe(synapses[ckey].weights, num_steps)
                 self._monitors[key] = monitor
 
+    def collect_all(self) -> None:
+        """Harvest data from all monitors while the runtime is still running.
+
+        Must be called before ``root.stop()``. Results are cached and returned
+        by subsequent ``get()`` calls.
+        """
+        for spec in self._probe_specs:
+            key = spec["key"]
+            if key not in self._monitors:
+                continue
+            monitor = self._monitors[key]
+            data = monitor.get_data()
+            if isinstance(data, dict):
+                for outer in data.values():
+                    if isinstance(outer, dict):
+                        for inner in outer.values():
+                            data = inner
+                            break
+                    else:
+                        data = outer
+                    break
+            data = np.array(data)
+            if data.ndim == 2:
+                data = data.T
+            self._data_cache[key] = data
+
     def get(
         self,
         name: str,
@@ -104,16 +131,25 @@ class LoihiRecorder:
         ``(steps, out, in)`` for weights.
         """
         key = self._make_key(name, population_id, connection_key)
+
+        # Return from cache if collect_all() was already called
+        if key in self._data_cache:
+            return self._data_cache[key]
+
         monitor = self._monitors.get(key)
         if monitor is None:
             return np.array([])
 
         data = monitor.get_data()
-        # Lava Monitor returns dict of {var_name: array}
-        # Get the first (and typically only) recorded variable
+        # Lava Monitor returns {process_name: {var_name: array}} — unwrap two levels
         if isinstance(data, dict):
-            for var_data in data.values():
-                data = var_data
+            for outer in data.values():
+                if isinstance(outer, dict):
+                    for inner in outer.values():
+                        data = inner
+                        break
+                else:
+                    data = outer
                 break
 
         data = np.array(data)
@@ -125,8 +161,9 @@ class LoihiRecorder:
         return data
 
     def reset(self) -> None:
-        """Clear monitors but keep probe specs."""
+        """Clear monitors and cache but keep probe specs."""
         self._monitors = {}
+        self._data_cache = {}
 
     @staticmethod
     def _make_key(

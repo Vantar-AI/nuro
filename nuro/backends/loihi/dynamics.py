@@ -89,17 +89,23 @@ def _build_if(node: DynamicsNode, dt: float):
     )
 
 
+_IZHIKEVICH_PRESETS: dict[str, dict[str, float]] = {
+    "regular_spiking": {"a": 0.02, "b": 0.2, "c": -65.0, "d": 8.0},
+    "intrinsically_bursting": {"a": 0.02, "b": 0.2, "c": -55.0, "d": 4.0},
+    "chattering": {"a": 0.02, "b": 0.2, "c": -50.0, "d": 2.0},
+    "fast_spiking": {"a": 0.1, "b": 0.2, "c": -65.0, "d": 2.0},
+    "low_threshold_spiking": {"a": 0.02, "b": 0.25, "c": -65.0, "d": 2.0},
+}
+
+
 def _build_izhikevich(node: DynamicsNode, dt: float):
     """Map Nuro Izhikevich → custom Lava Process (simulation only)."""
     from nuro.backends.loihi._custom_neurons import build_izhikevich_process
 
-    # Resolve preset if present
-    from nuro.backends.gpu.neurons import IzhikevichNode
-
     params = dict(node.params)
     preset = params.pop("preset", None)
-    if preset and preset in IzhikevichNode.PRESETS:
-        resolved = dict(IzhikevichNode.PRESETS[preset])
+    if preset and preset in _IZHIKEVICH_PRESETS:
+        resolved = dict(_IZHIKEVICH_PRESETS[preset])
         resolved.update(params)
         params = resolved
 
