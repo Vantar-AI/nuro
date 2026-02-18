@@ -2,6 +2,30 @@
 
 All notable changes to Nuro are documented here.
 
+## [0.6.0] - 2026-02-18
+
+### Added
+- **SpiNNaker 2 backend** — `nuro.compile(graph, target="spinnaker2")` compiles to py-spinnaker2 Network
+- SpiNNaker 2 neuron mapping: LIF/IF → `snn.Population(neuron_model="lif")` with alpha_decay; Izhikevich/AdEx → LIF approximation with warning
+- `SpiNNaker2CompiledModel.run()` executes via Brian2 simulator by default; `set_hardware(hw)` for real chip deployment
+- Weight transfer from GPU checkpoints with mandatory S2 quantization to integer range [-15, 15]
+- Input system: static tensors and Poisson rates via `spike_list` Populations; generator inputs raise clear error
+- Recurrent graph support: bidirectional and ring topologies compile and run correctly
+- `set_hardware(SpiNNaker2Chip(eth_ip=...))` to target real hardware
+- **Fixed-point weight quantization** for Loihi 2 — `compile(..., quantize=True)` converts weights to 8-bit signed integers matching Loihi 2 hardware format
+- `quantize_weights()` in Loihi transfer module with correct range [-256, 254] and even-integer constraint
+- **GitHub Actions CI** — three jobs: core tests (3.10/3.11/3.12), Loihi backend (3.10 + lava-nc), GPU backend (CPU torch)
+- **Recurrent graph support for Loihi** — cyclic/bidirectional topologies now compile and run
+- 21 new SpiNNaker 2 tests (skip gracefully without `spinnaker2` installed)
+- `[spinnaker2]` optional dependency: `pip install nuro[spinnaker2]`
+
+### Fixed
+- Loihi: `@implements` decorator was receiving `ABCMeta` instead of `LoihiProtocol`
+- Loihi: Izhikevich import chain triggering `torch` import in loihi-only environments
+- Loihi: `monitor.get_data()` two-level dict not fully unwrapped; data must be collected before `root.stop()`
+- Loihi: recurrent graphs had no driven nodes (ff-source detection now falls back to all nodes)
+- `networkx>=3.0` relaxed to `>=2.8` for lava-nc compatibility
+
 ## [0.5.0] - 2026-02-17
 
 ### Added

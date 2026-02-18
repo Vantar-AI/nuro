@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nuro"
-version = "0.5.0"
+version = "0.6.0"
 description = "The universal programming language for neuromorphic, thermodynamic, and biological computing."
 readme = "README.md"
 license = "Apache-2.0"
@@ -31,6 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 gpu = ["spikingjelly>=0.0.0.0.14", "torch>=2.0"]
 loihi = ["lava-nc>=0.9"]
+spinnaker2 = ["spinnaker2>=0.5"]
 dev = ["pytest>=7.0", "ruff>=0.1"]
 
 [project.urls]

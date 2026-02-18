@@ -54,6 +54,19 @@ jobs:
       - name: Run Loihi tests
         run: pytest tests/test_loihi_backend.py -v
 
+  # ── SpiNNaker 2 tests (skipped — SDK requires hardware access) ───────────
+  # Tests are written and skip gracefully when spinnaker2 is not installed.
+  # Enable this job once py-spinnaker2 is available (contact TU Dresden).
+  # test-spinnaker2:
+  #   name: SpiNNaker 2 backend
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.10", cache: pip }
+  #     - run: pip install -e ".[spinnaker2,dev]"
+  #     - run: pytest tests/test_spinnaker2_backend.py -v
+
   # ── GPU tests (Python 3.11, CPU-only torch) ───────────────────────────────
   test-gpu:
     name: GPU backend (CPU torch)

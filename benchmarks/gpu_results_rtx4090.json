@@ -1,0 +1,242 @@
+[
+  {
+    "neurons": 100,
+    "duration_s": 0.1,
+    "batch_size": 1,
+    "wall_ms": 31.31,
+    "spikes_per_sec": 638786,
+    "gpu_mem_mb": 8.2,
+    "total_spikes": 1318,
+    "num_steps": 100
+  },
+  {
+    "neurons": 100,
+    "duration_s": 0.1,
+    "batch_size": 8,
+    "wall_ms": 30.93,
+    "spikes_per_sec": 5172717,
+    "gpu_mem_mb": 8.2,
+    "total_spikes": 11231,
+    "num_steps": 100
+  },
+  {
+    "neurons": 100,
+    "duration_s": 0.1,
+    "batch_size": 32,
+    "wall_ms": 34.94,
+    "spikes_per_sec": 18318781,
+    "gpu_mem_mb": 8.3,
+    "total_spikes": 43110,
+    "num_steps": 100
+  },
+  {
+    "neurons": 100,
+    "duration_s": 0.1,
+    "batch_size": 128,
+    "wall_ms": 34.99,
+    "spikes_per_sec": 73155868,
+    "gpu_mem_mb": 8.5,
+    "total_spikes": 175491,
+    "num_steps": 100
+  },
+  {
+    "neurons": 100,
+    "duration_s": 1.0,
+    "batch_size": 1,
+    "wall_ms": 306.56,
+    "spikes_per_sec": 652403,
+    "gpu_mem_mb": 8.2,
+    "total_spikes": 14042,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 100,
+    "duration_s": 1.0,
+    "batch_size": 8,
+    "wall_ms": 306.54,
+    "spikes_per_sec": 5219593,
+    "gpu_mem_mb": 8.2,
+    "total_spikes": 112181,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 100,
+    "duration_s": 1.0,
+    "batch_size": 32,
+    "wall_ms": 348.34,
+    "spikes_per_sec": 18372974,
+    "gpu_mem_mb": 8.3,
+    "total_spikes": 444320,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 100,
+    "duration_s": 1.0,
+    "batch_size": 128,
+    "wall_ms": 350.11,
+    "spikes_per_sec": 73120390,
+    "gpu_mem_mb": 8.5,
+    "total_spikes": 1792589,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 0.1,
+    "batch_size": 1,
+    "wall_ms": 36.17,
+    "spikes_per_sec": 5529513,
+    "gpu_mem_mb": 12.0,
+    "total_spikes": 13300,
+    "num_steps": 100
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 0.1,
+    "batch_size": 8,
+    "wall_ms": 35.51,
+    "spikes_per_sec": 45055211,
+    "gpu_mem_mb": 12.2,
+    "total_spikes": 109776,
+    "num_steps": 100
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 0.1,
+    "batch_size": 32,
+    "wall_ms": 35.72,
+    "spikes_per_sec": 179178854,
+    "gpu_mem_mb": 12.8,
+    "total_spikes": 437993,
+    "num_steps": 100
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 0.1,
+    "batch_size": 128,
+    "wall_ms": 36.16,
+    "spikes_per_sec": 707876950,
+    "gpu_mem_mb": 15.5,
+    "total_spikes": 1751262,
+    "num_steps": 100
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 1.0,
+    "batch_size": 1,
+    "wall_ms": 349.8,
+    "spikes_per_sec": 5717527,
+    "gpu_mem_mb": 12.0,
+    "total_spikes": 139767,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 1.0,
+    "batch_size": 8,
+    "wall_ms": 358.38,
+    "spikes_per_sec": 44644861,
+    "gpu_mem_mb": 12.2,
+    "total_spikes": 1128171,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 1.0,
+    "batch_size": 32,
+    "wall_ms": 347.03,
+    "spikes_per_sec": 184423930,
+    "gpu_mem_mb": 12.8,
+    "total_spikes": 4492903,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 1000,
+    "duration_s": 1.0,
+    "batch_size": 128,
+    "wall_ms": 362.31,
+    "spikes_per_sec": 706580176,
+    "gpu_mem_mb": 15.5,
+    "total_spikes": 17999504,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 0.1,
+    "batch_size": 1,
+    "wall_ms": 58.59,
+    "spikes_per_sec": 34133069,
+    "gpu_mem_mb": 390.4,
+    "total_spikes": 139948,
+    "num_steps": 100
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 0.1,
+    "batch_size": 8,
+    "wall_ms": 65.26,
+    "spikes_per_sec": 245183649,
+    "gpu_mem_mb": 392.3,
+    "total_spikes": 1119456,
+    "num_steps": 100
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 0.1,
+    "batch_size": 32,
+    "wall_ms": 64.57,
+    "spikes_per_sec": 991189950,
+    "gpu_mem_mb": 399.0,
+    "total_spikes": 4469047,
+    "num_steps": 100
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 0.1,
+    "batch_size": 128,
+    "wall_ms": 83.32,
+    "spikes_per_sec": 3072365247,
+    "gpu_mem_mb": 426.9,
+    "total_spikes": 17842176,
+    "num_steps": 100
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 1.0,
+    "batch_size": 1,
+    "wall_ms": 583.57,
+    "spikes_per_sec": 34271802,
+    "gpu_mem_mb": 390.4,
+    "total_spikes": 1409541,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 1.0,
+    "batch_size": 8,
+    "wall_ms": 645.96,
+    "spikes_per_sec": 247691892,
+    "gpu_mem_mb": 392.3,
+    "total_spikes": 11274729,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 1.0,
+    "batch_size": 32,
+    "wall_ms": 645.79,
+    "spikes_per_sec": 991029270,
+    "gpu_mem_mb": 399.0,
+    "total_spikes": 45054038,
+    "num_steps": 1000
+  },
+  {
+    "neurons": 10000,
+    "duration_s": 1.0,
+    "batch_size": 128,
+    "wall_ms": 832.94,
+    "spikes_per_sec": 3073448259,
+    "gpu_mem_mb": 426.9,
+    "total_spikes": 180290187,
+    "num_steps": 1000
+  }
+]
