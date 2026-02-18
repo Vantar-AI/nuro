@@ -291,6 +291,11 @@ class LoihiBackend(Backend):
 
             gpu_weights = load_gpu_weights(weights_from)
             scale_factor = kwargs.get("scale_factor", 1.0)
-            apply_weights_to_lava(gpu_weights, synapses, scale_factor)
+            quantize = kwargs.get("quantize", False)
+            num_bits = kwargs.get("num_bits", 8)
+            apply_weights_to_lava(
+                gpu_weights, synapses, scale_factor,
+                quantize=quantize, num_bits=num_bits,
+            )
 
         return LoihiCompiledModel(neurons, synapses, ir_graph, dt)

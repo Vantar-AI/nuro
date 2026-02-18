@@ -148,6 +148,52 @@ class TestLoihiWeightTransfer:
         assert "total_spikes" in loihi_model.metrics
 
 
+class TestLoihiQuantization:
+    def test_quantize_weights_range(self):
+        """Quantized weights must stay within 8-bit Loihi range [-256, 254]."""
+        from nuro.backends.loihi.transfer import quantize_weights
+
+        weights = np.random.randn(10, 20).astype(np.float32) * 5.0
+        q, scale = quantize_weights(weights, num_bits=8)
+        assert q.dtype == np.int32
+        assert q.min() >= -256
+        assert q.max() <= 254
+
+    def test_quantize_weights_even(self):
+        """Loihi requires even integer weights (LSB=0)."""
+        from nuro.backends.loihi.transfer import quantize_weights
+
+        weights = np.random.randn(8, 8).astype(np.float32)
+        q, _ = quantize_weights(weights, num_bits=8)
+        assert np.all(q % 2 == 0)
+
+    def test_quantize_zero_weights(self):
+        """All-zero weights should return zeros without division by zero."""
+        from nuro.backends.loihi.transfer import quantize_weights
+
+        weights = np.zeros((5, 5), dtype=np.float32)
+        q, scale = quantize_weights(weights)
+        assert np.all(q == 0)
+        assert scale == 1.0
+
+    def test_quantize_preserves_sign(self):
+        """Positive weights → positive integers, negative → negative."""
+        from nuro.backends.loihi.transfer import quantize_weights
+
+        weights = np.array([[1.0, -1.0], [0.5, -0.5]], dtype=np.float32)
+        q, _ = quantize_weights(weights)
+        assert q[0, 0] > 0
+        assert q[0, 1] < 0
+
+    def test_compile_with_quantize_flag(self):
+        """compile(..., quantize=True) should succeed without error."""
+        graph, p1, p2, conn = _simple_graph()
+        # quantize=True without weights_from is a no-op (no weights to quantize)
+        model = nuro.compile(graph, target="loihi", quantize=True)
+        assert model is not None
+        model.run(duration=0.01)
+
+
 class TestLoihiAPI:
     def test_compile_via_api_entry_point(self):
         """Test that nuro.compile(graph, target='loihi') works end-to-end."""
