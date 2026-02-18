@@ -8,6 +8,7 @@ from nuro.api.graph import Graph
 from nuro.api.input import Input
 from nuro.api.objective import Objective
 from nuro.api.population import Population
+from nuro.backends.cloud.client import set_api_key
 
 
 def load(path: str, target: str = "gpu", dt: float = 1e-3):
@@ -40,4 +41,5 @@ __all__ = [
     "Population",
     "compile",
     "load",
+    "set_api_key",
 ]

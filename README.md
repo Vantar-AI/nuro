@@ -2,13 +2,11 @@
 
 # Nuro
 
-**The universal SDK for spiking neural networks.**
-
-*Train on GPU. Deploy to neuromorphic silicon. One API, any backend.*
+**Train on GPU. Deploy to neuromorphic silicon. One API.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.5.0)
+[![Version](https://img.shields.io/badge/version-0.6.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.6.0)
 [![Tests](https://img.shields.io/badge/tests-121%20passing-brightgreen.svg)](#testing)
 [![Website](https://img.shields.io/badge/website-vantar.xyz-white.svg)](https://vantar.xyz)
 
@@ -16,132 +14,137 @@
 
 ---
 
-## What is Nuro?
-
-Nuro is a Python SDK for building spiking neural networks that compiles to multiple backends. Define your network once — train with surrogate gradients on GPU, then deploy the same network to Intel Loihi, SpiNNaker, or analog neuromorphic chips. No code changes. The GPU is your training workbench. Neuromorphic silicon is the destination.
-
-```python
-import nuro
-
-# Define populations
-sensory = nuro.Population(size=100, dynamics="izhikevich", params={"preset": "regular_spiking"})
-motor = nuro.Population(size=20, dynamics="adex")
-
-# Connect with STDP learning
-conn = nuro.Connection(source=sensory, target=motor, pattern="dense", plasticity="stdp")
-
-# Bring your own data
-inp = nuro.Input(population=sensory, data=my_spike_tensor)
-
-# Compile and run
-graph = nuro.Graph([sensory, motor], [conn], inputs=[inp])
-model = nuro.compile(graph, target="gpu")
-
-# Record state during simulation
-model.record("voltages", population=motor)
-model.record("spikes", population=motor)
-model.run(duration=1.0)
-
-# Inspect results
-voltages = model.get_state("voltages", population=motor)  # (1000, 20) tensor
-spikes = model.get_state("spikes", population=motor)      # (1000, 20) tensor
-
-# Save for later
-model.save("my_network.pt")
-```
-
-## Why Nuro?
-
-The neuromorphic ecosystem is fragmented. SpikingJelly, Lava, BrainPy, Norse — each framework locks you into one paradigm. Nuro provides a single abstraction layer: define once, train on GPU, deploy to silicon.
-
-- **Train on GPU, deploy to silicon** — surrogate gradients for training, then recompile to Loihi/SpiNNaker with zero code changes
-- **Backend-agnostic** — write once, compile to GPU (SpikingJelly), Loihi (Lava), or future targets
-- **Gradient training** — surrogate gradients for BPTT with standard PyTorch optimizers
-- **Biologically realistic** — LIF, IF, Izhikevich, and AdEx neuron models out of the box
-- **Batch support** — run N parallel trials with `model.run(batch_size=32)` for 10-50x speedups
-- **State inspection** — record voltages, spikes, and weight dynamics during simulation
-- **Checkpointing** — save and load trained networks with `model.save()` / `nuro.load()`
-- **Bring your own data** — static tensors, generators, or configurable Poisson inputs
-
-## Installation
+## Install
 
 ```bash
-# From source (recommended during early access)
-git clone https://github.com/Vantar-AI/nuro.git
-cd nuro
+git clone https://github.com/Vantar-AI/nuro.git && cd nuro
 pip install -e ".[gpu,dev]"
-
-# With Loihi backend (requires lava-nc)
-pip install -e ".[gpu,loihi,dev]"
 ```
 
-**Requirements:** Python 3.10+, PyTorch 2.0+, SpikingJelly 0.0.0.0.14+
-**Optional:** Lava-nc 0.9+ (for Loihi backend)
-
-## Quick Start
-
-### Hello Spikes
+## Hello Spikes
 
 ```python
 import nuro
 
-input_pop = nuro.Population(size=100, dynamics="lif", params={"tau": 20e-3})
-output_pop = nuro.Population(size=10, dynamics="lif", params={"tau": 10e-3})
+# Define network
+inp  = nuro.Population(size=100, dynamics="lif", params={"tau": 20e-3})
+out  = nuro.Population(size=10,  dynamics="lif", params={"tau": 10e-3})
+conn = nuro.Connection(source=inp, target=out, pattern="dense")
+graph = nuro.Graph([inp, out], [conn])
 
-conn = nuro.Connection(source=input_pop, target=output_pop, pattern="dense", plasticity="stdp")
-graph = nuro.Graph([input_pop, output_pop], [conn])
-
+# Compile and run
 model = nuro.compile(graph, target="gpu")
 model.run(duration=1.0)
 
 print(f"Total spikes: {model.metrics['total_spikes']}")
+# You just simulated a spiking neural network.
 ```
 
-### Custom Input
+Deploy to Loihi 2 or SpiNNaker 2 with one line change:
 
 ```python
-import torch
-import nuro
-
-pop = nuro.Population(size=50, dynamics="lif")
-out = nuro.Population(size=10, dynamics="lif")
-conn = nuro.Connection(source=pop, target=out, pattern="dense")
-
-# Option 1: Static tensor (num_steps, pop_size)
-inp = nuro.Input(population=pop, data=torch.rand(1000, 50))
-
-# Option 2: Generator function
-inp = nuro.Input(population=pop, generator=lambda step: (torch.rand(50) < 0.1).float())
-
-# Option 3: Configurable Poisson rate
-inp = nuro.Input(population=pop, mode="poisson", rate=100.0)
-
-graph = nuro.Graph([pop, out], [conn], inputs=[inp])
+model = nuro.compile(graph, target="loihi")     # Intel Loihi 2 via Lava
+model = nuro.compile(graph, target="spinnaker2") # SpiNNaker 2 via py-spinnaker2
+model = nuro.compile(graph, target="cloud", hardware="loihi")  # Vantar Cloud (v0.7)
 ```
+
+---
+
+## Why Nuro?
+
+The neuromorphic ecosystem is fragmented. Every framework locks you into one target. Nuro is the abstraction layer that isn't.
+
+| Framework | GPU Training | Loihi Deploy | SpiNNaker | API Quality |
+|-----------|-------------|-------------|-----------|-------------|
+| **SpikingJelly** | ✓ | ✗ | ✗ | Good |
+| **Lava (Intel)** | ✗ | ✓ | ✗ | Verbose |
+| **PyNN** | ✗ | Limited | ✓ | Dated |
+| **Norse** | ✓ | ✗ | ✗ | Good |
+| **Nuro** | **✓** | **✓** | **✓** | **Clean** |
+
+Define once. Train on GPU with surrogate gradients. Recompile to any neuromorphic target — zero code changes.
+
+---
+
+## Performance
+
+Batched simulation on RTX 4090 (1,000-neuron network, 1-second simulation):
+
+| Batch size | Wall time | Throughput | Speedup vs single |
+|-----------|-----------|-----------|------------------|
+| 1 | 350ms | 5.7M spikes/s | 1× |
+| 32 | 347ms | 184M spikes/s | **32×** |
+| 128 | 362ms | 707M spikes/s | **124×** |
+
+128 parallel trials in the same time as 1. `model.run(batch_size=128)`.
+
+---
+
+## Supported Hardware
+
+| Target | Backend | Status | Notes |
+|--------|---------|--------|-------|
+| `"gpu"` | SpikingJelly + PyTorch | **Stable** | Training + surrogate gradients |
+| `"loihi"` | Intel Lava | **Stable** (v0.5) | Sim + real hardware (INRC access) |
+| `"spinnaker2"` | py-spinnaker2 + Brian2 | **Stable** (v0.6) | Sim + real hardware |
+| `"cloud"` | Vantar Cloud API | Beta (v0.7) | Remote compile + deploy |
+
+**Neuron models:** LIF, IF, Izhikevich (5 presets), AdEx
+**Connectivity:** Dense, Random Sparse
+**Plasticity:** STDP (trace-based), surrogate gradient BPTT
+
+---
+
+## API Examples
 
 ### Biologically Realistic Neurons
 
 ```python
 import nuro
 
-# Izhikevich with preset firing patterns
+# Izhikevich with firing pattern presets
 exc = nuro.Population(size=800, dynamics="izhikevich", params={"preset": "regular_spiking"})
 inh = nuro.Population(size=200, dynamics="izhikevich", params={"preset": "fast_spiking"})
 
 # Adaptive Exponential IF
 adex = nuro.Population(size=100, dynamics="adex")
-
-# Or raw Izhikevich parameters
-custom = nuro.Population(size=50, dynamics="izhikevich", params={"a": 0.02, "b": 0.2, "c": -50.0, "d": 2.0})
 ```
 
-**Available Izhikevich presets:** `regular_spiking`, `intrinsically_bursting`, `chattering`, `fast_spiking`, `low_threshold_spiking`
+**Izhikevich presets:** `regular_spiking`, `intrinsically_bursting`, `chattering`, `fast_spiking`, `low_threshold_spiking`
+
+### Train on GPU → Deploy to Silicon
+
+```python
+import torch, nuro
+
+# 1. Define network (shared across all backends)
+sensory = nuro.Population(size=50, dynamics="lif", params={"tau": 20e-3})
+motor   = nuro.Population(size=10, dynamics="lif", params={"tau": 10e-3})
+conn    = nuro.Connection(source=sensory, target=motor, pattern="dense")
+inp     = nuro.Input(population=sensory, mode="poisson", rate=100.0)
+graph   = nuro.Graph([sensory, motor], [conn], inputs=[inp])
+
+# 2. Train on GPU
+gpu_model = nuro.compile(graph, target="gpu", requires_grad=True, surrogate="atan")
+optimizer = torch.optim.Adam(gpu_model.snn.parameters(), lr=1e-3)
+for _ in range(100):
+    optimizer.zero_grad()
+    out = gpu_model.run(duration=0.1)
+    loss = -out[motor.id].sum()
+    loss.backward()
+    optimizer.step()
+    gpu_model.reset()
+gpu_model.save("trained.pt")
+
+# 3. Deploy to Loihi (one line)
+loihi_model = nuro.compile(graph, target="loihi", weights_from="trained.pt")
+loihi_model.run(duration=1.0)
+print(loihi_model.metrics)
+```
 
 ### Recurrent Networks
 
 ```python
-import nuro
-
 exc = nuro.Population(size=400, dynamics="lif", params={"tau": 20e-3})
 inh = nuro.Population(size=100, dynamics="lif", params={"tau": 10e-3})
 
@@ -149,152 +152,117 @@ conn_ei = nuro.Connection(source=exc, target=inh, pattern="dense")
 conn_ie = nuro.Connection(source=inh, target=exc, pattern="dense")
 
 graph = nuro.Graph([exc, inh], [conn_ei, conn_ie])
-print(graph.is_cyclic)  # True — Nuro handles this automatically
+print(graph.is_cyclic)  # True — Nuro handles recurrence automatically
 ```
 
 ### State Recording
 
 ```python
 model = nuro.compile(graph, target="gpu")
-model.record("voltages", population=output_pop)
-model.record("spikes", population=output_pop)
-model.record("weights", connection=conn, interval=100)
+model.record("voltages", population=motor)
+model.record("spikes",   population=motor)
+model.record("weights",  connection=conn, interval=100)
 
 model.run(duration=1.0)
 
-v = model.get_state("voltages", population=output_pop)   # (1000, pop_size)
-s = model.get_state("spikes", population=output_pop)     # (1000, pop_size)
-w = model.get_state("weights", connection=conn)           # (10, out, in)
+v = model.get_state("voltages", population=motor)  # (1000, 10) tensor
+s = model.get_state("spikes",   population=motor)  # (1000, 10) tensor
+w = model.get_state("weights",  connection=conn)   # (10, 10, 50) snapshots
 ```
 
 ### Batched Simulation
 
 ```python
-import nuro
-
-sensory = nuro.Population(size=100, dynamics="lif", params={"tau": 20e-3})
-motor = nuro.Population(size=20, dynamics="lif", params={"tau": 10e-3})
-conn = nuro.Connection(source=sensory, target=motor, pattern="dense")
-graph = nuro.Graph([sensory, motor], [conn])
-
 model = nuro.compile(graph, target="gpu")
 model.record("spikes", population=motor)
 
-# Run 32 independent trials in parallel
-model.run(duration=1.0, batch_size=32)
+model.run(duration=1.0, batch_size=32)   # 32 parallel trials
 
-spikes = model.get_state("spikes", population=motor)  # (1000, 32, 20)
-per_trial = spikes.sum(dim=(0, 2))  # spike count per trial
-print(f"Mean: {per_trial.mean():.0f}, Std: {per_trial.std():.0f}")
+spikes = model.get_state("spikes", population=motor)  # (1000, 32, 10)
+per_trial = spikes.sum(dim=(0, 2))
+print(f"Mean: {per_trial.mean():.0f} spikes  Std: {per_trial.std():.0f}")
 ```
 
-### Gradient Training
-
-```python
-import torch
-import nuro
-
-inp_pop = nuro.Population(size=10, dynamics="lif", params={"tau": 20e-3})
-out_pop = nuro.Population(size=5, dynamics="lif", params={"tau": 10e-3})
-conn = nuro.Connection(source=inp_pop, target=out_pop, pattern="dense")
-
-data = (torch.rand(50, 10) < 0.3).float()
-inp = nuro.Input(population=inp_pop, data=data)
-graph = nuro.Graph([inp_pop, out_pop], [conn], inputs=[inp])
-
-# Enable surrogate gradients
-model = nuro.compile(graph, target="gpu", requires_grad=True, surrogate="atan")
-optimizer = torch.optim.Adam(model.snn.parameters(), lr=1e-3)
-
-optimizer.zero_grad()
-output = model.run(duration=0.05, dt=1e-3)  # Returns spike counts dict
-loss = output[out_pop.id].sum()              # Your loss here
-loss.backward()
-optimizer.step()
-```
-
-**Available surrogates:** `"atan"` (default), `"sigmoid"`, `"triangular"`
-
-### Deploy to Loihi
-
-```python
-import nuro
-
-# Train on GPU
-gpu_model = nuro.compile(graph, target="gpu", requires_grad=True)
-# ... training loop ...
-gpu_model.save("trained.pt")
-
-# Deploy to Loihi (one line change)
-loihi_model = nuro.compile(graph, target="loihi", weights_from="trained.pt")
-loihi_model.record("spikes", population=motor)
-loihi_model.run(duration=1.0)
-
-# Switch to real hardware (requires INRC access)
-# from lava.magma.core.run_configs import Loihi2HwCfg
-# loihi_model.set_run_config(Loihi2HwCfg())
-```
-
-### Checkpointing
-
-```python
-# Save after training
-model.run(duration=10.0)
-model.save("trained_network.pt")
-
-# Load later
-loaded = nuro.load("trained_network.pt")
-loaded.run(duration=1.0)
-```
-
-## Examples
-
-See [`examples/basics/`](examples/basics/) for complete runnable scripts:
-
-| Example | What it shows |
-|---------|--------------|
-| [`custom_input.py`](examples/basics/custom_input.py) | Static tensors, generators, custom Poisson rates |
-| [`state_recording.py`](examples/basics/state_recording.py) | Recording voltages, spikes, and weight snapshots |
-| [`izhikevich_network.py`](examples/basics/izhikevich_network.py) | Izh presets, AdEx, mixed-dynamics networks |
-| [`recurrent_network.py`](examples/basics/recurrent_network.py) | Mutual inhibition, ring circuits, recurrent Izh |
-| [`batched_simulation.py`](examples/basics/batched_simulation.py) | 32 parallel trials, cross-trial variance analysis |
-| [`train_xor.py`](examples/training/train_xor.py) | XOR training with surrogate gradients and Adam optimizer |
-| [`deploy_to_loihi.py`](examples/deployment/deploy_to_loihi.py) | Train on GPU → deploy to Loihi (sim or hardware) |
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  API Layer                                          │
-│  Population · Connection · Input · Graph · compile  │
-├─────────────────────────────────────────────────────┤
-│  Intermediate Representation                        │
-│  DynamicsNode · SynapticEdge · IRGraph              │
-├─────────────────────────────────────────────────────┤
-│  Backends                                           │
-│  GPU (SpikingJelly) · Loihi (Lava) · more           │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  API Layer                                               │
+│  Population · Connection · Input · Graph · compile()     │
+├──────────────────────────────────────────────────────────┤
+│  Intermediate Representation (IR)                        │
+│  DynamicsNode · SynapticEdge · IRGraph                   │
+├──────────────────────────────────────────────────────────┤
+│  Backends                                                │
+│  GPU (SpikingJelly) · Loihi (Lava) · SpiNNaker2 · Cloud  │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**Neuron models:** LIF, IF, Izhikevich, AdEx
-**Training:** Surrogate gradients (ATan, sigmoid, triangular) + PyTorch optimizers
-**Connectivity:** Dense, Random Sparse
-**Plasticity:** STDP (trace-based)
-**Graph types:** DAG (topological sort) and Cyclic (Jacobi iteration)
-**Backends:** GPU (SpikingJelly) — Loihi (Lava) — SpiNNaker (planned)
+```mermaid
+graph LR
+    A[Define Network] --> B[IRGraph]
+    B --> C{compile target}
+    C -->|gpu| D[NuroSNN<br/>PyTorch]
+    C -->|loihi| E[Lava Process<br/>Graph]
+    C -->|spinnaker2| F[py-spinnaker2<br/>Network]
+    C -->|cloud| G[Vantar Cloud<br/>API]
+    D -->|save| H[trained.pt]
+    H -->|weights_from| E
+    H -->|weights_from| F
+    H -->|weights_from| G
+```
+
+---
+
+## Examples
+
+| Example | What it shows |
+|---------|--------------|
+| [`basics/custom_input.py`](examples/basics/custom_input.py) | Static tensors, generators, Poisson inputs |
+| [`basics/state_recording.py`](examples/basics/state_recording.py) | Voltages, spikes, weight snapshots |
+| [`basics/izhikevich_network.py`](examples/basics/izhikevich_network.py) | Izhikevich presets, AdEx, mixed dynamics |
+| [`basics/recurrent_network.py`](examples/basics/recurrent_network.py) | Mutual inhibition, ring circuits |
+| [`basics/batched_simulation.py`](examples/basics/batched_simulation.py) | 32 parallel trials, cross-trial analysis |
+| [`basics/visualize_spikes.py`](examples/basics/visualize_spikes.py) | Spike raster + voltage trace plots |
+| [`training/train_xor.py`](examples/training/train_xor.py) | XOR with surrogate gradients + Adam |
+| [`training/mnist_snn.py`](examples/training/mnist_snn.py) | MNIST classification with SNN |
+| [`deployment/deploy_to_loihi.py`](examples/deployment/deploy_to_loihi.py) | Train GPU → deploy Loihi 2 |
+| [`deployment/deploy_to_spinnaker2.py`](examples/deployment/deploy_to_spinnaker2.py) | Train GPU → deploy SpiNNaker 2 |
+
+---
 
 ## Roadmap
 
 | Version | Status | Features |
 |---------|--------|----------|
-| **v0.1.0** | Done | Core API, IR, GPU backend, LIF/IF, STDP |
-| **v0.2.0** | Done | User inputs, state recording, Izh/AdEx, recurrent graphs, checkpointing |
-| **v0.3.0** | Done | Batch support, performance benchmarks |
-| **v0.4.0** | Done | Surrogate gradients, BPTT training, differentiable neurons |
-| **v0.5.0** | **Current** | Intel Loihi 2 backend (Lava), weight transfer GPU→Loihi, train→deploy workflow |
-| **v0.6.0** | Planned | SpiNNaker 2 backend, custom neuron dynamics on Loihi NeuroCores |
-| **v0.7.0** | Planned | Vantar Cloud — remote compile and deploy to neuromorphic hardware |
-| **v1.0.0** | Planned | Stable API, documentation site, model zoo |
+| **v0.1–0.4** | Done | Core API, IR, GPU backend, LIF/IF/Izh/AdEx, STDP, BPTT, batch support |
+| **v0.5.0** | Done | Intel Loihi 2 backend (Lava), weight transfer GPU→Loihi |
+| **v0.6.0** | **Current** | SpiNNaker 2 backend, custom neurons on Loihi NeuroCores |
+| **v0.7.0** | Next | Vantar Cloud — remote compile + deploy to neuromorphic hardware |
+| **v1.0.0** | Planned | Stable API, docs site, model zoo |
+
+---
+
+## FAQ
+
+**Q: How is this different from PyNN?**
+PyNN is a simulator interface from 2008. Nuro has a modern Python API, gradient training via surrogate functions, and targets current hardware (Loihi 2, SpiNNaker 2). Different goals.
+
+**Q: Do I need neuromorphic hardware?**
+No. GPU backend works on any machine with PyTorch. Loihi/SpiNNaker backends fall back to simulators (Lava sim, Brian2). Real hardware is optional.
+
+**Q: Is it suitable for academic research?**
+Yes. Apache 2.0 license. State recording, gradient training, and biological neuron models (Izhikevich, AdEx) are all first-class. Cite the repo in your paper.
+
+**Q: Is the API stable?**
+Core API (Population, Connection, Graph, compile) is stable from v0.1. We don't break it between minor versions. v1.0 freezes it.
+
+**Q: What is Vantar Cloud?**
+A managed API for remote compilation and hardware access. Submit a Nuro graph, run it on Loihi or SpiNNaker without owning the chip. Join the waitlist at [vantar.xyz](https://vantar.xyz).
+
+---
 
 ## Testing
 
@@ -303,47 +271,28 @@ pip install -e ".[gpu,dev]"
 pytest tests/ -v
 ```
 
-121 tests covering the full stack: API validation, IR lowering, GPU execution, Loihi deployment, neuron models, recurrent graphs, state recording, checkpointing, batch support, gradient training, and weight transfer.
+121 tests covering the full stack: API, IR, GPU, Loihi, SpiNNaker2, neuron models, recurrence, state recording, checkpoints, batching, gradients, weight transfer.
 
-## The Vision
+---
 
-```
-┌──────────────────────────────────────────┐
-│  Nuro SDK (open source, Apache 2.0)      │
-│  Define → Train on GPU → Deploy to chip  │
-├──────────────────────────────────────────┤
-│  Vantar Cloud (coming 2026)              │
-│  Remote compile · Deploy · Monitor       │
-└──────────────────────────────────────────┘
-```
+## Vantar Cloud — Early Access
 
-GPU is the training workbench. Neuromorphic silicon is the deployment target. Vantar Cloud is the managed platform. [Learn more at vantar.xyz](https://vantar.xyz)
+Nuro is open source. Vantar Cloud is the managed platform: submit a network, run it on Loihi 2 or SpiNNaker 2 without hardware access.
 
-## Early Access
+**Who it's for:** researchers without INRC access, teams evaluating neuromorphic before committing to hardware.
 
-Nuro is in active development. We're looking for early testers:
+[**Join the waitlist → vantar.xyz**](https://vantar.xyz)
 
-- **SNN researchers** who want a cleaner API than raw SpikingJelly/Norse
-- **Neuromorphic engineers** with Loihi/SpiNNaker access to help build backends
-- **ML engineers** curious about spiking networks for edge deployment
-
-**How to get involved:**
-1. Clone the repo and try the [examples](examples/basics/)
-2. Open an [issue](https://github.com/Vantar-AI/nuro/issues) with feedback, bugs, or feature requests
-3. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup
-
-We especially want to hear: *What would make you switch from your current SNN framework?*
+---
 
 ## License
 
-Apache 2.0 — Free to use, modify, and distribute.
+Apache 2.0 — free to use, modify, distribute.
 
 ---
 
 <div align="center">
 
-**[Vantar AI](https://vantar.ai)** — Building the universal substrate for neural computation.
-
-[GitHub](https://github.com/Vantar-AI/nuro) · [Issues](https://github.com/Vantar-AI/nuro/issues) · [Examples](examples/basics/)
+**[Vantar AI](https://vantar.xyz)** · [GitHub](https://github.com/Vantar-AI/nuro) · [Issues](https://github.com/Vantar-AI/nuro/issues) · [Docs](docs/)
 
 </div>

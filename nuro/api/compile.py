@@ -18,6 +18,10 @@ def compile(
     quantize: bool = False,
     num_bits: int = 8,
     scale_factor: float = 1.0,
+    # Cloud backend kwargs
+    hardware: str = "loihi",
+    api_key: str | None = None,
+    endpoint: str | None = None,
 ) -> CompiledModel:
     """Compile a Graph to a runnable model on the specified backend.
 
@@ -49,6 +53,15 @@ def compile(
     scale_factor : float
         Manual weight scale override.  When ``quantize=False``, weights
         are multiplied by this value.  Default 1.0.
+    hardware : str
+        Target chip for the cloud backend (``"loihi"`` or ``"spinnaker2"``).
+        Only used when ``target="cloud"``.  Default ``"loihi"``.
+    api_key : str, optional
+        Vantar Cloud API key.  Falls back to ``VANTAR_API_KEY`` environment
+        variable.  Only used when ``target="cloud"``.
+    endpoint : str, optional
+        Vantar Cloud API base URL override.  Defaults to
+        ``https://api.vantar.xyz``.  Only used when ``target="cloud"``.
 
     Returns
     -------
@@ -68,4 +81,7 @@ def compile(
         quantize=quantize,
         num_bits=num_bits,
         scale_factor=scale_factor,
+        hardware=hardware,
+        api_key=api_key,
+        endpoint=endpoint,
     )
