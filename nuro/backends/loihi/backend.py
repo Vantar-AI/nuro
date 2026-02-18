@@ -65,15 +65,22 @@ class LoihiCompiledModel(CompiledModel):
 
         num_steps = int(duration / dt)
 
-        # Build input processes for source populations
-        targets = {e.target_id for e in self._ir_graph.edges}
-        source_ids = {nid for nid in self._ir_graph.nodes if nid not in targets}
-
+        # Identify which nodes have an explicit Input spec
         input_specs: dict[str, Any] = {}
         for inp in self._ir_graph.inputs:
             input_specs[inp.id] = inp
 
-        driven_ids = source_ids | set(input_specs.keys())
+        # Feedforward source nodes: not the target of any edge
+        targets = {e.target_id for e in self._ir_graph.edges}
+        ff_source_ids = {nid for nid in self._ir_graph.nodes if nid not in targets}
+
+        # For recurrent graphs every node is a target — fall back to driving all
+        # nodes that have an explicit Input spec, or all nodes if none specified
+        if ff_source_ids:
+            driven_ids = ff_source_ids | set(input_specs.keys())
+        else:
+            # Recurrent graph: drive explicit inputs, or all nodes by default
+            driven_ids = set(input_specs.keys()) or set(self._ir_graph.nodes.keys())
 
         from nuro.backends.loihi.inputs import build_input_process, build_default_input
 
@@ -87,18 +94,21 @@ class LoihiCompiledModel(CompiledModel):
                 inp_proc = build_default_input(pop_size, num_steps, dt)
             input_processes[sid] = inp_proc
 
-        # Connect inputs to neurons
+        # Connect inputs to neurons.
+        # For feedforward nodes: connect via the synapse Dense process.
+        # For recurrent/directly-driven nodes: connect straight to a_in so
+        # external current adds to whatever recurrent activity already arrives.
         for sid, inp_proc in input_processes.items():
-            # Check if there are direct connections from this source
-            has_outgoing = False
-            for edge in self._ir_graph.edges:
-                if edge.source_id == sid:
+            outgoing_edges = [e for e in self._ir_graph.edges if e.source_id == sid]
+
+            if outgoing_edges and sid in ff_source_ids:
+                # Pure feedforward source — drive downstream synapses
+                for edge in outgoing_edges:
                     key = f"{edge.source_id}__{edge.target_id}"
                     inp_proc.s_out.connect(self._synapses[key].s_in)
-                    has_outgoing = True
-
-            if not has_outgoing:
-                # Source with no outgoing edges — connect directly to neuron a_in
+            else:
+                # Recurrent node or explicit Input on a non-source — connect
+                # directly to the neuron's accumulation port
                 if sid in self._neurons:
                     inp_proc.s_out.connect(self._neurons[sid].a_in)
 

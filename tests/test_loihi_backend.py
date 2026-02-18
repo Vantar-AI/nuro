@@ -148,6 +148,52 @@ class TestLoihiWeightTransfer:
         assert "total_spikes" in loihi_model.metrics
 
 
+class TestLoihiRecurrent:
+    def test_recurrent_two_pop(self):
+        """Bidirectional connections — both nodes are targets, neither is a ff source."""
+        p1 = Population(size=10, dynamics="lif", params={"tau": 20e-3})
+        p2 = Population(size=10, dynamics="lif", params={"tau": 20e-3})
+        conn_fwd = Connection(source=p1, target=p2, pattern="dense")
+        conn_back = Connection(source=p2, target=p1, pattern="dense")
+        graph = Graph([p1, p2], [conn_fwd, conn_back])
+        model = nuro.compile(graph, target="loihi")
+        model.run(duration=0.01)
+        assert model.metrics["num_steps"] == 10
+
+    def test_recurrent_three_pop_ring(self):
+        """Three populations in a ring (A→B→C→A)."""
+        pA = Population(size=8, dynamics="lif", params={"tau": 20e-3})
+        pB = Population(size=8, dynamics="lif", params={"tau": 20e-3})
+        pC = Population(size=8, dynamics="lif", params={"tau": 20e-3})
+        c1 = Connection(source=pA, target=pB, pattern="dense")
+        c2 = Connection(source=pB, target=pC, pattern="dense")
+        c3 = Connection(source=pC, target=pA, pattern="dense")
+        graph = Graph([pA, pB, pC], [c1, c2, c3])
+        model = nuro.compile(graph, target="loihi")
+        model.run(duration=0.01)
+        assert model.metrics["num_steps"] == 10
+
+    def test_recurrent_with_explicit_input(self):
+        """Recurrent graph with a user-provided input on one node."""
+        p1 = Population(size=10, dynamics="lif", params={"tau": 20e-3})
+        p2 = Population(size=10, dynamics="lif", params={"tau": 20e-3})
+        conn_fwd = Connection(source=p1, target=p2, pattern="dense")
+        conn_back = Connection(source=p2, target=p1, pattern="dense")
+        from nuro.api.input import Input
+        inp = Input(population=p1, mode="poisson", rate=100.0)
+        graph = Graph([p1, p2], [conn_fwd, conn_back], inputs=[inp])
+        model = nuro.compile(graph, target="loihi")
+        model.run(duration=0.01)
+        assert model.metrics["num_steps"] == 10
+
+    def test_feedforward_still_works(self):
+        """Ensure DAG graphs are unaffected by recurrent changes."""
+        graph, p1, p2, conn = _simple_graph()
+        model = nuro.compile(graph, target="loihi")
+        model.run(duration=0.01)
+        assert model.metrics["num_steps"] == 10
+
+
 class TestLoihiQuantization:
     def test_quantize_weights_range(self):
         """Quantized weights must stay within 8-bit Loihi range [-256, 254]."""
