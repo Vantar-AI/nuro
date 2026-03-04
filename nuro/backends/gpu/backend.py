@@ -42,12 +42,19 @@ class NuroSNN(nn.Module):
         # Build synapse layers
         self.synapses = nn.ModuleDict()
         self._edge_map: dict[str, SynapticEdge] = {}
+        self._delay_steps: dict[str, int] = {}
         for edge in ir_graph.edges:
             key = f"{edge.source_id}__{edge.target_id}"
             source_node = ir_graph.nodes[edge.source_id]
             target_node = ir_graph.nodes[edge.target_id]
             self.synapses[key] = build_synapse_layer(edge, source_node, target_node)
             self._edge_map[key] = edge
+            delay = getattr(edge, "delay", 0.0)
+            self._delay_steps[key] = max(0, int(delay / dt)) if delay > 0 else 0
+
+        # Delay ring buffers: key → deque of spike tensors
+        self._delay_buffers: dict[str, list[torch.Tensor | None]] = {}
+        self._has_delays = any(d > 0 for d in self._delay_steps.values())
 
     def init_state(self, batch_size: int) -> None:
         """Initialize batched state buffers for custom neurons (Izh/AdEx).
@@ -61,6 +68,25 @@ class NuroSNN(nn.Module):
         for neuron_layer in self.neurons.values():
             if isinstance(neuron_layer, (IzhikevichNode, AdExNode)):
                 neuron_layer.init_state(batch_size)
+
+    def init_delay_buffers(self, batch_size: int = 1) -> None:
+        """Initialize delay ring buffers. Call before simulation loop."""
+        self._delay_buffers = {}
+        for key, delay in self._delay_steps.items():
+            if delay > 0:
+                self._delay_buffers[key] = [None] * delay
+
+    def _get_delayed_spikes(
+        self, key: str, current_spikes: torch.Tensor
+    ) -> torch.Tensor | None:
+        """Push current spikes into delay buffer and return delayed output."""
+        if key not in self._delay_buffers:
+            return current_spikes
+        buf = self._delay_buffers[key]
+        # FIFO: pop oldest, push newest
+        delayed = buf.pop(0)
+        buf.append(current_spikes)
+        return delayed
 
     def forward(
         self,
@@ -101,7 +127,14 @@ class NuroSNN(nn.Module):
             for src_id in self.pop_order:
                 key = f"{src_id}__{nid}"
                 if key in self.synapses and src_id in lookup:
-                    x = x + self.synapses[key](lookup[src_id])
+                    src_spikes = lookup[src_id]
+                    # Apply synaptic delay if configured
+                    if self._has_delays and key in self._delay_buffers:
+                        delayed = self._get_delayed_spikes(key, src_spikes)
+                        if delayed is not None:
+                            x = x + self.synapses[key](delayed)
+                    else:
+                        x = x + self.synapses[key](src_spikes)
 
             spikes[nid] = self.neurons[nid](x)
 
@@ -142,7 +175,7 @@ class GPUCompiledModel(CompiledModel):
         """Access the underlying SNN module (useful for optimizer param access)."""
         return self._snn
 
-    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1):
+    def run(self, duration: float, dt: float = 1e-3, batch_size: int = 1, callbacks=None):
         """Run the model for *duration* seconds with timestep *dt*.
 
         Parameters
@@ -155,6 +188,8 @@ class GPUCompiledModel(CompiledModel):
             Number of parallel trials. When 1 (default), tensors have no
             batch dimension for full backward compatibility. When > 1,
             all internal tensors gain a leading ``(batch,)`` dimension.
+        callbacks : list of Callback, optional
+            Training callbacks for logging/MLOps integration.
 
         Returns
         -------
@@ -163,6 +198,7 @@ class GPUCompiledModel(CompiledModel):
             id to the **sum of output spikes** over time (shape matches
             the population tensor shape).  Use this for loss computation.
         """
+        callbacks = callbacks or []
         num_steps = int(duration / dt)
         functional.reset_net(self._snn)
         for updater_tuple in self._stdp_updaters:
@@ -171,6 +207,10 @@ class GPUCompiledModel(CompiledModel):
         # Initialize batched state for custom neurons
         if batch_size > 1:
             self._snn.init_state(batch_size)
+
+        # Initialize delay buffers
+        if self._snn._has_delays:
+            self._snn.init_delay_buffers(batch_size)
 
         # Identify source populations (no incoming edges)
         targets = {e.target_id for e in self._ir_graph.edges}
@@ -184,6 +224,10 @@ class GPUCompiledModel(CompiledModel):
         # Populations that need external input: source pops (no incoming edges)
         # plus any pop with an explicit Input spec (even in cyclic graphs)
         driven_ids = source_id_set | set(input_specs.keys())
+
+        # Notify callbacks
+        for cb in callbacks:
+            cb.on_run_start({"duration": duration, "dt": dt, "batch_size": batch_size, "num_steps": num_steps})
 
         spike_counts: dict[str, int] = {nid: 0 for nid in self._ir_graph.nodes}
         total_spikes = 0
@@ -245,6 +289,10 @@ class GPUCompiledModel(CompiledModel):
                     spike_counts[nid] += count
                     total_spikes += count
 
+                # Notify callbacks
+                for cb in callbacks:
+                    cb.on_step(_step, spikes, {"total_spikes": total_spikes})
+
         if self._requires_grad:
             _step_loop()
         else:
@@ -259,6 +307,9 @@ class GPUCompiledModel(CompiledModel):
             "dt": dt,
             "batch_size": batch_size,
         }
+
+        for cb in callbacks:
+            cb.on_run_end(self._metrics)
 
         if self._requires_grad:
             return output_accum

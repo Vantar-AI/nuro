@@ -273,6 +273,7 @@ class LoihiBackend(Backend):
             neurons[nid] = build_lava_neuron(node, dt)
 
         # Build synapse (Dense) Processes and connect ports
+        online_learning = kwargs.get("online_learning", False)
         synapses: dict[str, Any] = {}
         for edge in ir_graph.edges:
             key = f"{edge.source_id}__{edge.target_id}"
@@ -284,10 +285,22 @@ class LoihiBackend(Backend):
                 target_node.size, source_node.size
             ).astype(np.float32) * 0.1
 
-            dense = Dense(weights=w_init)
+            # Use LearningDense for on-chip STDP when requested
+            use_learning = (
+                online_learning
+                or edge.plasticity in ("stdp", "stdp_online")
+            )
+            if use_learning:
+                try:
+                    from lava.proc.learning_dense.process import LearningDense
+                    dense = LearningDense(weights=w_init)
+                except ImportError:
+                    dense = Dense(weights=w_init)
+            else:
+                dense = Dense(weights=w_init)
             synapses[key] = dense
 
-            # Connect: source.s_out → dense.s_in, dense.a_out → target.a_in
+            # Connect: source.s_out -> dense.s_in, dense.a_out -> target.a_in
             neurons[edge.source_id].s_out.connect(dense.s_in)
             dense.a_out.connect(neurons[edge.target_id].a_in)
 

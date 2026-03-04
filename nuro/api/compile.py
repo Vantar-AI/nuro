@@ -15,9 +15,11 @@ def compile(
     requires_grad: bool = False,
     surrogate: str = "atan",
     weights_from: str | None = None,
-    quantize: bool = False,
+    quantize: bool | None = None,
     num_bits: int = 8,
     scale_factor: float = 1.0,
+    quantize_aware: bool = False,
+    online_learning: bool = False,
     # Cloud backend kwargs
     hardware: str = "loihi",
     api_key: str | None = None,
@@ -43,16 +45,24 @@ def compile(
         Path to a GPU checkpoint file (``.pt``).  When provided, trained
         weights are loaded and transferred to the target backend.  This
         enables the train-on-GPU → deploy-to-hardware workflow.
-    quantize : bool
+    quantize : bool or None
         When ``True``, convert weights to fixed-point integers before
-        writing to the Loihi backend.  Required for real Loihi 2 hardware;
-        not needed for simulation.  Default ``False``.
+        writing to hardware.  When ``None`` (default), auto-quantization
+        is enabled for hardware targets (loihi, spinnaker2) when
+        ``weights_from`` is set.  Set to ``False`` to explicitly disable.
     num_bits : int
         Fixed-point precision for weight quantization.  Default 8
-        (Loihi 2 native).  Only used when ``quantize=True``.
+        (Loihi 2 native).  Only used when quantization is active.
     scale_factor : float
         Manual weight scale override.  When ``quantize=False``, weights
         are multiplied by this value.  Default 1.0.
+    quantize_aware : bool
+        When ``True`` and ``target="gpu"``, enable quantization-aware
+        training with fake quantization during forward passes.
+    online_learning : bool
+        When ``True``, enable on-chip learning rules for hardware backends.
+        On Loihi, uses ``LearningDense`` for STDP.  On SpiNNaker 2,
+        enables ARM core learning rule execution.  Default ``False``.
     hardware : str
         Target chip for the cloud backend (``"loihi"`` or ``"spinnaker2"``).
         Only used when ``target="cloud"``.  Default ``"loihi"``.
@@ -71,6 +81,13 @@ def compile(
     if target == "auto":
         target = "gpu"
 
+    # Auto-quantization: enable for hardware targets when weights are provided
+    if quantize is None:
+        if target in ("loihi", "spinnaker2") and weights_from is not None:
+            quantize = True
+        else:
+            quantize = False
+
     ir_graph = IRGraph.from_api_graph(graph)
     backend = get_backend(target)
     return backend.compile(
@@ -81,6 +98,8 @@ def compile(
         quantize=quantize,
         num_bits=num_bits,
         scale_factor=scale_factor,
+        quantize_aware=quantize_aware,
+        online_learning=online_learning,
         hardware=hardware,
         api_key=api_key,
         endpoint=endpoint,

@@ -36,4 +36,4 @@ class TestCompile:
             nuro.compile(graph, target="spinnaker")
 
     def test_version(self):
-        assert nuro.__version__ == "0.5.0"
+        assert nuro.__version__ == "0.7.0"

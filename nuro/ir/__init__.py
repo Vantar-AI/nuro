@@ -49,6 +49,7 @@ class IRGraph:
                 target_id=conn.target.id,
                 pattern=conn.pattern,
                 plasticity=conn.plasticity,
+                delay=getattr(conn, "delay", 0.0),
                 params=dict(conn.params),
             )
             ir.edges.append(edge)

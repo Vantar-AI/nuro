@@ -31,4 +31,5 @@ class SynapticEdge:
     target_id: str
     pattern: str
     plasticity: str = "none"
+    delay: float = 0.0
     params: dict[str, Any] = field(default_factory=dict)

@@ -176,6 +176,7 @@ class SpiNNaker2Backend(Backend):
             ``scale_factor`` — manual weight scale override.
             ``delay`` — synaptic delay in timesteps [0, 7]. Default 0.
             ``record_all`` — enable spike+voltage recording on all pops.
+            ``online_learning`` — enable on-chip learning rules on ARM cores.
         """
         requires_grad = kwargs.get("requires_grad", False)
         if requires_grad:

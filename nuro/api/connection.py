@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from nuro.api.population import Population
 
-SUPPORTED_PATTERNS = {"dense", "random_sparse"}
-SUPPORTED_PLASTICITY = {"none", "stdp"}
+SUPPORTED_PATTERNS = {"dense", "random_sparse", "one_to_one", "conv1d", "distance_dependent"}
+SUPPORTED_PLASTICITY = {"none", "stdp", "stdp_online"}
 
 
 @dataclass
@@ -35,6 +35,7 @@ class Connection:
     target: Population
     pattern: str = "dense"
     plasticity: str = "none"
+    delay: float = 0.0
     params: dict[str, Any] = field(default_factory=dict)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12], repr=False)
 

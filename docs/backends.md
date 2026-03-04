@@ -11,6 +11,7 @@ Nuro compiles the same network definition to multiple backends. This document ex
 | `gpu` | RTX/A100/M-series | ✓ Surrogate gradients | Simulation only | GPU |
 | `loihi` | Intel Loihi 2 | ✗ | ✓ Real silicon | INRC (free) |
 | `spinnaker2` | SpiNNaker 2 | ✗ | ✓ Real silicon | SpiNNcloud |
+| `akida` | BrainChip Akida | ✗ | ✓ Real silicon | BrainChip SDK |
 | `cloud` | Any | ✗ | ✓ Remote deploy | Vantar Cloud (beta) |
 
 **The workflow:** GPU for training, neuromorphic silicon for deployment.
@@ -116,6 +117,38 @@ model.set_hardware(True)
 
 ---
 
+## Akida Backend (v0.7.0)
+
+**Module:** `nuro.backends.akida`
+**Library:** BrainChip MetaTF/Akida SDK
+**Install:** `pip install -e ".[akida]"`
+
+BrainChip's Akida is the most commercially deployed neuromorphic chip. Ultra-low power inference.
+
+**What it does:**
+- Compiles to Akida model via MetaTF SDK
+- 1/2/4/8-bit weight quantization (4-bit default)
+- Weight transfer from GPU checkpoint
+- ~300mW power consumption
+
+**Neuron models on Akida:**
+- LIF, IF: supported (spiking dense layers)
+- Izhikevich, AdEx: not supported
+
+**When to use:** Commercial edge deployment, ultra-low power inference.
+
+**Compile options:**
+```python
+model = nuro.compile(
+    graph,
+    target="akida",
+    weights_from="trained.pt",
+    num_bits=4,    # Quantization precision
+)
+```
+
+---
+
 ## Cloud Backend (v0.7.0)
 
 **Module:** `nuro.backends.cloud`
@@ -168,6 +201,12 @@ pip install -e ".[loihi]"
 ```bash
 pip install spinnaker2>=0.5 brian2
 pip install -e ".[spinnaker2]"
+```
+
+### Akida
+```bash
+pip install akida>=2.0
+pip install -e ".[akida]"
 ```
 
 ### Cloud

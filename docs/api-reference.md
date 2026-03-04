@@ -255,11 +255,130 @@ model.snn.to("cuda")
 
 ---
 
+## NIR Interoperability
+
+Import models from any NIR-compatible framework (SpikingJelly, Norse, snnTorch, Sinabs, Lava).
+
+### `nuro.from_nir()`
+
+```python
+nuro.from_nir(nir_graph: nir.NIRGraph) -> IRGraph
+```
+
+Import a NIR graph into Nuro. Supports LIF, IF, CubaLIF neurons and Affine/Linear connections.
+
+### `nuro.to_nir()`
+
+```python
+nuro.to_nir(graph: Graph | IRGraph) -> nir.NIRGraph
+```
+
+Export a Nuro graph to NIR format for use with other frameworks.
+
+**Requires:** `pip install nuro[nir]`
+
+---
+
+## ANN-to-SNN Conversion
+
+### `nuro.convert_ann()`
+
+```python
+nuro.convert_ann(
+    model: nn.Module,
+    input_shape: tuple,
+    num_steps: int = 100,
+) -> Graph
+```
+
+Convert a trained PyTorch ANN to a Nuro SNN. Supports:
+- `nn.Linear` -> IF population + dense connection
+- `nn.Conv2d` -> flattened dense connection
+- `nn.ReLU` -> absorbed into IF threshold
+- `nn.BatchNorm` -> folded into preceding weights
+
+### `normalize_weights()`
+
+```python
+from nuro.conversion import normalize_weights
+
+normalize_weights(
+    graph: Graph,
+    method: str = "robust",  # or "max"
+    percentile: float = 99.0,
+) -> Graph
+```
+
+Normalize connection weights for hardware deployment.
+
+---
+
+## Connectivity Patterns
+
+| Pattern | Description | Params |
+|---------|-------------|--------|
+| `"dense"` | All-to-all (default) | — |
+| `"random_sparse"` | Random with sparsity | `sparsity: float` |
+| `"one_to_one"` | Diagonal (requires equal sizes) | — |
+| `"conv1d"` | 1D convolutional | `kernel_size: int`, `stride: int` |
+| `"distance_dependent"` | Gaussian distance-based | `sigma: float` |
+
+---
+
+## Synaptic Delays
+
+```python
+conn = nuro.Connection(
+    source=pop1, target=pop2,
+    delay=5e-3,  # 5ms delay
+)
+```
+
+Spikes arrive at the target population after the specified delay. On hardware:
+- **Loihi:** Native delay support
+- **SpiNNaker 2:** Delay range [0, 7] timesteps
+
+---
+
+## Callbacks (MLOps)
+
+```python
+from nuro.callbacks import WandbCallback, TensorBoardCallback, PrintCallback
+
+model.run(duration=0.1, callbacks=[
+    WandbCallback(project="my-snn"),
+    PrintCallback(log_interval=100),
+])
+```
+
+---
+
+## Datasets
+
+```python
+from nuro.datasets import NMNIST, DVSCifar10, DVSGesture
+
+dataset = NMNIST(root="./data", train=True, num_steps=300)
+spike_tensor, label = dataset[0]
+```
+
+---
+
 ## Supported Dynamics Summary
 
 | `dynamics` | Description | Hardware support |
 |------------|-------------|-----------------|
-| `"lif"` | Leaky Integrate-and-Fire | GPU, Loihi, SpiNNaker |
-| `"if"` | Integrate-and-Fire (no leak) | GPU, Loihi, SpiNNaker |
+| `"lif"` | Leaky Integrate-and-Fire | GPU, Loihi, SpiNNaker, Akida |
+| `"if"` | Integrate-and-Fire (no leak) | GPU, Loihi, SpiNNaker, Akida |
 | `"izhikevich"` | Izhikevich (5 presets) | GPU, Loihi (sim), SpiNNaker (sim) |
 | `"adex"` | Adaptive Exponential IF | GPU, Loihi (sim), SpiNNaker (sim) |
+
+## Supported Backends
+
+| Backend | Target | Install |
+|---------|--------|---------|
+| `"gpu"` | NVIDIA GPU / CPU | `pip install nuro[gpu]` |
+| `"loihi"` | Intel Loihi 2 | `pip install nuro[loihi]` |
+| `"spinnaker2"` | SpiNNaker 2 | `pip install nuro[spinnaker2]` |
+| `"akida"` | BrainChip Akida | `pip install nuro[akida]` |
+| `"cloud"` | Vantar Cloud | Built-in |
