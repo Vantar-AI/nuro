@@ -18,19 +18,44 @@ from nuro.recording import Recording
 
 
 @dataclass
-class HardwareConfig:
-    """Describes the hardware platform for an experiment."""
+class ChipConfig:
+    """Describes a single chip in a multi-chip setup."""
 
-    platform: str  # "gpu", "loihi2", "spinnaker2", "dynap-se2", "akida", ...
-    chip_id: str = ""
+    chip_id: str
+    chip_type: str
+    role: str = ""  # e.g. "input", "processing", "output"
     params: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"platform": self.platform, "chip_id": self.chip_id, "params": self.params}
+        return {"chip_id": self.chip_id, "chip_type": self.chip_type, "role": self.role, "params": self.params}
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ChipConfig:
+        return cls(chip_id=d["chip_id"], chip_type=d["chip_type"], role=d.get("role", ""), params=d.get("params", {}))
+
+
+@dataclass
+class HardwareConfig:
+    """Describes the hardware platform for an experiment.
+
+    Supports both single-chip and multi-chip setups.
+    """
+
+    platform: str  # "gpu", "loihi2", "spinnaker2", "dynap-se2", "multi-chip", ...
+    chip_id: str = ""
+    params: dict[str, Any] = field(default_factory=dict)
+    chips: list[ChipConfig] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"platform": self.platform, "chip_id": self.chip_id, "params": self.params}
+        if self.chips:
+            d["chips"] = [c.to_dict() for c in self.chips]
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> HardwareConfig:
-        return cls(platform=d["platform"], chip_id=d.get("chip_id", ""), params=d.get("params", {}))
+        chips = [ChipConfig.from_dict(c) for c in d.get("chips", [])]
+        return cls(platform=d["platform"], chip_id=d.get("chip_id", ""), params=d.get("params", {}), chips=chips)
 
 
 class Experiment:
@@ -64,14 +89,31 @@ class Experiment:
         self.status = "running"
 
         self._hardware: HardwareConfig | None = None
+        self._calibration: Any = None  # CalibrationProfile (lazy import)
         self._network: dict[str, Any] | None = None
         self._recordings: dict[str, Recording] = {}
         self._metrics: dict[str, Any] = {}
         self._params: dict[str, Any] = {}
 
-    def set_hardware(self, platform: str, **kwargs: Any) -> None:
-        """Set the hardware configuration."""
-        self._hardware = HardwareConfig(platform=platform, params=kwargs)
+    def set_hardware(self, platform: str, chips: list | None = None, **kwargs: Any) -> None:
+        """Set the hardware configuration.
+
+        For multi-chip setups, pass a list of ChipConfig objects.
+        """
+        self._hardware = HardwareConfig(
+            platform=platform,
+            params=kwargs,
+            chips=chips or [],
+        )
+
+    def set_calibration(self, profile: Any) -> None:
+        """Attach a CalibrationProfile to this experiment.
+
+        Parameters
+        ----------
+        profile : nuro.calibration.CalibrationProfile
+        """
+        self._calibration = profile
 
     def set_network(
         self,
@@ -150,6 +192,7 @@ class Experiment:
             <directory>/<experiment_id>/
                 experiment.json
                 network.json          (if set)
+                calibration.h5        (if set)
                 recording_<label>.h5  (per recording)
         """
         base = Path(directory) / self.id
@@ -165,6 +208,7 @@ class Experiment:
             "status": self.status,
             "created_at": self.created_at,
             "hardware": self._hardware.to_dict() if self._hardware else None,
+            "calibration": self._calibration.to_dict() if self._calibration else None,
             "params": self._params,
             "metrics": self._metrics,
             "recordings": list(self._recordings.keys()),
@@ -174,6 +218,10 @@ class Experiment:
         # Network
         if self._network:
             (base / "network.json").write_text(json.dumps(self._network, indent=2, default=str))
+
+        # Calibration
+        if self._calibration:
+            self._calibration.save_hdf5(str(base / "calibration.h5"))
 
         # Recordings
         for label, rec in self._recordings.items():
@@ -201,6 +249,12 @@ class Experiment:
 
         if meta.get("hardware"):
             exp._hardware = HardwareConfig.from_dict(meta["hardware"])
+
+        # Calibration
+        cal_path = base / "calibration.h5"
+        if cal_path.exists():
+            from nuro.calibration import CalibrationProfile
+            exp._calibration = CalibrationProfile.load_hdf5(str(cal_path))
 
         # Network
         net_path = base / "network.json"

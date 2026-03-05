@@ -9,8 +9,10 @@ from nuro.api.input import Input
 from nuro.api.objective import Objective
 from nuro.api.population import Population
 from nuro.backends.cloud.client import set_api_key
+from nuro.calibration import CalibrationProfile
 from nuro.experiment import Experiment
 from nuro.recording import Recording
+from nuro.sweep import ParameterSweep
 from nuro import adapters, copilot, plot
 
 
@@ -105,11 +107,13 @@ def experiment(name: str, **kwargs) -> Experiment:
 
 
 __all__ = [
+    "CalibrationProfile",
     "Connection",
     "Experiment",
     "Graph",
     "Input",
     "Objective",
+    "ParameterSweep",
     "Population",
     "Recording",
     "adapters",
