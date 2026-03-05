@@ -34,7 +34,9 @@ loihi = ["lava-nc>=0.9"]
 spinnaker2 = ["spinnaker2>=0.5"]
 nir = ["nir>=1.0"]
 akida = ["akida>=2.0"]
-dev = ["pytest>=7.0", "ruff>=0.1"]
+devtools = ["h5py>=3.0", "matplotlib>=3.5"]
+samna = ["samna>=0.30"]
+dev = ["pytest>=7.0", "ruff>=0.1", "h5py>=3.0", "matplotlib>=3.5"]
 
 [project.urls]
 Homepage = "https://github.com/Vantar-AI/nuro"

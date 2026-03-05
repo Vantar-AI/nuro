@@ -9,7 +9,9 @@ from nuro.api.input import Input
 from nuro.api.objective import Objective
 from nuro.api.population import Population
 from nuro.backends.cloud.client import set_api_key
-from nuro import copilot
+from nuro.experiment import Experiment
+from nuro.recording import Recording
+from nuro import adapters, copilot, plot
 
 
 def load(path: str, target: str = "gpu", dt: float = 1e-3):
@@ -97,17 +99,27 @@ def convert_ann(model, input_shape, num_steps=100):
     return _convert(model, input_shape, num_steps)
 
 
+def experiment(name: str, **kwargs) -> Experiment:
+    """Create a new Experiment (convenience factory)."""
+    return Experiment(name, **kwargs)
+
+
 __all__ = [
     "Connection",
+    "Experiment",
     "Graph",
     "Input",
     "Objective",
     "Population",
+    "Recording",
+    "adapters",
     "compile",
     "convert_ann",
     "copilot",
+    "experiment",
     "from_nir",
     "load",
+    "plot",
     "set_api_key",
     "to_nir",
 ]

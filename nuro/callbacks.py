@@ -163,3 +163,63 @@ class PrintCallback(Callback):
 
     def close(self) -> None:
         pass
+
+
+class ExperimentCallback(Callback):
+    """Callback that auto-records into an Experiment.
+
+    Captures spike counts per population at each step and logs
+    final metrics when the run completes.
+
+    Parameters
+    ----------
+    experiment : nuro.experiment.Experiment
+        The experiment to record into.
+    recording_label : str
+        Label for the recording (default "main").
+    dt : float
+        Timestep in seconds.
+    log_interval : int
+        Record every N steps (default 1).
+    """
+
+    def __init__(
+        self,
+        experiment: Any,
+        recording_label: str = "main",
+        dt: float = 1e-3,
+        log_interval: int = 1,
+    ) -> None:
+        self.experiment = experiment
+        self.recording_label = recording_label
+        self.dt = dt
+        self.log_interval = log_interval
+        self._recording = None
+
+    def on_run_start(self, config: dict[str, Any]) -> None:
+        self.experiment.set_params(**config)
+        self._recording = self.experiment.new_recording(
+            self.recording_label, dt=self.dt
+        )
+        self._recording.add_probe("spike_counts")
+
+    def on_step(self, step: int, spikes: dict[str, Any], metrics: dict[str, Any]) -> None:
+        if self._recording is None or step % self.log_interval != 0:
+            return
+
+        import numpy as np
+
+        counts = []
+        for nid in sorted(spikes.keys()):
+            s = spikes[nid]
+            count = int(s.detach().sum().item()) if hasattr(s, "detach") else int(np.sum(s))
+            counts.append(count)
+
+        self._recording.append("spike_counts", np.array(counts))
+
+    def on_run_end(self, metrics: dict[str, Any]) -> None:
+        self.experiment.log_metrics(metrics)
+        self.experiment.complete()
+
+    def close(self) -> None:
+        pass
