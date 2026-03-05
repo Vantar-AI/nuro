@@ -1,7 +1,6 @@
-"""Cloud experiment storage client — push/pull experiments to Vantar Cloud.
+"""Cloud experiment storage client - push/pull experiments to Vantar Cloud.
 
-Deferred to v0.9.0. This module provides the API surface; actual cloud
-endpoints are not yet available.
+Coming in Nuro v0.9. Sign up at https://vantar.xyz/cloud to get notified.
 """
 
 from __future__ import annotations
@@ -10,6 +9,19 @@ from pathlib import Path
 from typing import Any
 
 from nuro.backends.cloud.client import _get_api_key, _headers, DEFAULT_ENDPOINT
+
+_COMING_SOON = (
+    "\n"
+    "Vantar Cloud experiment storage is coming in v0.9.\n"
+    "  - Push experiments to the cloud\n"
+    "  - Share recordings with collaborators\n"
+    "  - Compare runs across hardware platforms\n"
+    "  - Remote access to neuromorphic chips\n"
+    "\n"
+    "Sign up for early access: https://vantar.xyz/cloud\n"
+    "\n"
+    "For now, use Experiment.save() / Experiment.load() for local persistence."
+)
 
 
 def push_experiment(
@@ -33,10 +45,7 @@ def push_experiment(
     str
         Remote experiment ID.
     """
-    raise NotImplementedError(
-        "Cloud experiment storage is coming in Nuro v0.9. "
-        "Use Experiment.save() for local persistence."
-    )
+    raise NotImplementedError(_COMING_SOON)
 
 
 def pull_experiment(
@@ -52,10 +61,7 @@ def pull_experiment(
     Path
         Local directory containing the experiment.
     """
-    raise NotImplementedError(
-        "Cloud experiment storage is coming in Nuro v0.9. "
-        "Use Experiment.load() for local persistence."
-    )
+    raise NotImplementedError(_COMING_SOON)
 
 
 def list_experiments(
@@ -64,9 +70,7 @@ def list_experiments(
     api_key: str | None = None,
 ) -> list[dict[str, Any]]:
     """List experiments on Vantar Cloud."""
-    raise NotImplementedError(
-        "Cloud experiment storage is coming in Nuro v0.9."
-    )
+    raise NotImplementedError(_COMING_SOON)
 
 
 def compare_experiments(
@@ -76,6 +80,4 @@ def compare_experiments(
     api_key: str | None = None,
 ) -> dict[str, Any]:
     """Compare experiments on Vantar Cloud."""
-    raise NotImplementedError(
-        "Cloud experiment storage is coming in Nuro v0.9."
-    )
+    raise NotImplementedError(_COMING_SOON)
