@@ -9,7 +9,7 @@ Record. Track. Visualize. Deploy.
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Version](https://img.shields.io/badge/version-0.8.0-green.svg)](https://github.com/Vantar-AI/nuro/releases/tag/v0.8.0)
-[![Tests](https://img.shields.io/badge/tests-203%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-227%20passing-brightgreen.svg)](#testing)
 [![Website](https://img.shields.io/badge/website-vantar.xyz-white.svg)](https://vantar.xyz)
 
 </div>
@@ -19,6 +19,8 @@ Record. Track. Visualize. Deploy.
 The first experiment tracking platform for neuromorphic research. Capture spike trains from any hardware - Loihi, SpiNNaker, DYNAP-SE2, or GPU simulations. Track experiments with metadata and metrics. Visualize with one line. No PyTorch required.
 
 The SNN compiler is still here too: train on GPU with surrogate gradients, deploy to neuromorphic silicon with zero code changes.
+
+<img src="nuro_devtools_dashboard.png" alt="Nuro DevTools Dashboard" width="100%">
 
 ## Install
 
@@ -85,6 +87,72 @@ nuro.plot.compare_recordings({
 }, metric="spikes")
 ```
 
+## Import AER Events
+
+Load binary spike data from any neuromorphic chip - aedat 2.0 files from jAER, raw binary streams, or pre-parsed numpy arrays:
+
+```python
+from nuro.adapters.aer import from_aedat, from_aer_binary, from_aer_events
+
+# Parse aedat 2.0 files (jAER format)
+rec = from_aedat("recording.aedat", num_neurons=256, dt=1e-3)
+
+# Generic binary AER (configurable byte widths, endianness)
+rec = from_aer_binary("raw.bin", num_neurons=128, dt=1e-3, ts_scale=1e-6)
+
+# From pre-parsed numpy arrays (vectorized binning)
+neuron_ids = np.array([0, 1, 0, 2, 1, 3])
+timestamps = np.array([0.001, 0.002, 0.005, 0.009, 0.010, 0.015])
+rec = from_aer_events(neuron_ids, timestamps, num_neurons=256, dt=1e-3)
+```
+
+## Chip Calibration
+
+Track transistor mismatch across analog neuromorphic chips. Store per-neuron parameters, compute mismatch statistics, persist to HDF5:
+
+```python
+from nuro.calibration import CalibrationProfile
+
+cal = CalibrationProfile(chip_id="dynapse2_board03", chip_type="dynap-se2")
+cal.set_neurons_bulk("threshold", np.array([-50.0, -51.2, -49.5, -52.0, ...]))
+cal.set_neurons_bulk("tau", np.array([20e-3, 18e-3, 22e-3, 19e-3, ...]))
+
+stats = cal.mismatch_stats("threshold")
+# {'mean': -50.7, 'std': 1.1, 'cv': -0.022, 'min': -52.0, 'max': -49.5}
+
+# Attach to experiments
+exp.set_calibration(cal)
+
+# HDF5 persistence
+cal.save_hdf5("calibration.h5")
+loaded = CalibrationProfile.load_hdf5("calibration.h5")
+```
+
+## Parameter Sweeps
+
+Sweep physical parameters (bias currents, thresholds, time constants) and find optimal operating points:
+
+```python
+from nuro.sweep import ParameterSweep
+
+sweep = ParameterSweep(name="bias_sweep", parameter="bias_current", unit="nA")
+for bias in [50, 100, 150, 200, 250, 300]:
+    exp = nuro.experiment(f"run_{bias}")
+    # ... run experiment on chip ...
+    exp.log_metric("firing_rate_hz", measured_rate)
+    sweep.add_run(bias, experiment=exp)
+
+# Find optimal point
+best = sweep.best("firing_rate_hz", mode="max")
+# {'value': 200, 'metric_value': 65.3, 'index': 3}
+
+# Plot sweep curve
+sweep.plot("firing_rate_hz")
+
+# Save entire sweep (all experiments + recordings)
+sweep.save("./sweeps")
+```
+
 ## GPU Bridge
 
 Already using Nuro's GPU compiler? Bridge to DevTools in one line:
@@ -145,7 +213,9 @@ Every lab has ad-hoc Python scripts. No structured way to capture, store, compar
 | What | Nuro | Other frameworks |
 |------|------|-----------------|
 | Experiment tracking | Recording, Experiment, metrics, HDF5 | Ad-hoc scripts |
-| Hardware adapters | GPU, Loihi, Samna, CSV, HDF5, NIR | Hardware-specific only |
+| Hardware adapters | AER, GPU, Loihi, Samna, CSV, HDF5, NIR | Hardware-specific only |
+| Chip calibration | CalibrationProfile, mismatch stats | Spreadsheets |
+| Parameter sweeps | ParameterSweep, best-finding, plotting | Manual loops |
 | Visualization | Raster, traces, rates, dashboard, compare | DIY matplotlib |
 | GPU training | Surrogate gradients, BPTT, batch | Some |
 | Hardware deploy | Loihi 2, SpiNNaker 2, Akida | One target each |
@@ -159,6 +229,7 @@ Every lab has ad-hoc Python scripts. No structured way to capture, store, compar
 
 | Adapter | Hardware | Requires SDK? |
 |---------|----------|---------------|
+| `adapters.aer` | Any AER hardware (aedat 2.0, binary) | No |
 | `adapters.gpu` | GPU (PyTorch) | Yes |
 | `adapters.lava` | Intel Loihi 2 | Yes |
 | `adapters.samna` | SynSense (DYNAP-SE2, Xylo) | Live capture: yes. Offline: **no** |
@@ -185,8 +256,10 @@ Every lab has ad-hoc Python scripts. No structured way to capture, store, compar
 nuro/
   recording.py          # Hardware-agnostic Recording (numpy, HDF5)
   experiment.py         # Experiment tracking (metadata, metrics, persistence)
+  calibration.py        # Chip calibration profiles (mismatch stats, HDF5)
+  sweep.py              # Parameter sweeps (metrics, best-finding, plotting)
   plot.py               # Visualization (raster, traces, dashboard, compare)
-  adapters/             # Hardware bridges (GPU, Loihi, Samna, file)
+  adapters/             # Hardware bridges (AER, GPU, Loihi, Samna, file)
   callbacks.py          # MLOps + ExperimentCallback
   api/                  # User-facing API (Population, Connection, Graph, compile)
   ir/                   # Intermediate Representation (compiler boundary)
@@ -202,7 +275,7 @@ nuro/
 | Version | Status | Features |
 |---------|--------|----------|
 | **v0.1-0.7** | Done | Core API, IR, GPU + Loihi + SpiNNaker2 + Akida backends, NIR, ANN-to-SNN, auto-quantization |
-| **v0.8.0** | **Current** | Neuromorphic DevTools: Recording, Experiment, Plot, Adapters (203 tests) |
+| **v0.8.0** | **Current** | Neuromorphic DevTools: Recording, Experiment, Plot, AER, Calibration, Sweeps, Adapters (227 tests) |
 | **v0.9.0** | Next | Vantar Cloud: experiment storage, sharing, remote hardware access |
 | **v1.0.0** | Planned | Stable API, documentation site, model zoo |
 
@@ -215,7 +288,7 @@ pip install -e ".[gpu,dev]"
 pytest tests/ -v
 ```
 
-203 tests covering: Recording, Experiment, Plot, Adapters, API, IR, GPU, Loihi, SpiNNaker2, Akida, neuron models, gradients, batching, checkpoints, connectivity, quantization, callbacks, datasets.
+227 tests covering: Recording, Experiment, Plot, AER, Calibration, Sweeps, Adapters, API, IR, GPU, Loihi, SpiNNaker2, Akida, neuron models, gradients, batching, checkpoints, connectivity, quantization, callbacks, datasets.
 
 ---
 
