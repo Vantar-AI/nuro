@@ -31,7 +31,7 @@ class ChipConfig:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ChipConfig:
-        return cls(chip_id=d["chip_id"], chip_type=d["chip_type"], role=d.get("role", ""), params=d.get("params", {}))
+        return cls(chip_id=d["chip_id"], chip_type=d.get("chip_type", ""), role=d.get("role", ""), params=d.get("params", {}))
 
 
 @dataclass
@@ -100,10 +100,14 @@ class Experiment:
 
         For multi-chip setups, pass a list of ChipConfig objects.
         """
+        chip_list = [
+            ChipConfig.from_dict(c) if isinstance(c, dict) else c
+            for c in (chips or [])
+        ]
         self._hardware = HardwareConfig(
             platform=platform,
             params=kwargs,
-            chips=chips or [],
+            chips=chip_list,
         )
 
     def set_calibration(self, profile: Any) -> None:
